@@ -3,10 +3,13 @@
 // ============================================================
 
 import { NextRequest } from 'next/server';
-import { validateAuth, relayRequest, RelayError } from '@/lib/relay';
-import { checkQuota } from '@/lib/usage';
+import { validateAuth, relayRequest } from '@/lib/relay';
+import { RelayError } from '@/lib/errors';
+import { KVUsageStorage } from '@/lib/usage';
 
 export const runtime = 'edge';
+
+const usageStorage = new KVUsageStorage();
 
 /**
  * POST /v1/chat/completions
@@ -74,7 +77,7 @@ export async function POST(request: NextRequest) {
   }
 
   // 3.5. Check rate limits (quota)
-  const quota = await checkQuota();
+  const quota = await usageStorage.checkQuota();
   if (!quota.allowed) {
     return new Response(
       JSON.stringify({
@@ -100,7 +103,6 @@ export async function POST(request: NextRequest) {
 
     // 5. Stream or return the response
     if (body.stream) {
-      // Streaming: pipe the upstream SSE stream directly
       return new Response(response.body, {
         status: response.status,
         headers: {
@@ -112,7 +114,6 @@ export async function POST(request: NextRequest) {
         },
       });
     } else {
-      // Non-streaming: return the full response
       const responseBody = await response.text();
       return new Response(responseBody, {
         status: response.status,
@@ -128,7 +129,6 @@ export async function POST(request: NextRequest) {
       return error.toResponse();
     }
 
-    // Unexpected error
     console.error('Relay error:', error);
     return new Response(
       JSON.stringify({

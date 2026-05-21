@@ -3,11 +3,13 @@
 // ============================================================
 
 import { NextRequest } from 'next/server';
-import { getKeyPoolStats } from '@/lib/key-manager';
-import { getGlobalUsage, checkQuota } from '@/lib/usage';
+import { getKeyPoolStats, getRelayApiKeys } from '@/lib/relay';
+import { KVUsageStorage } from '@/lib/usage';
 import { PROVIDERS } from '@/lib/providers';
 
 export const runtime = 'edge';
+
+const usageStorage = new KVUsageStorage();
 
 /**
  * GET /api/admin
@@ -22,10 +24,7 @@ export async function GET(request: NextRequest) {
   // Auth check — require RELAY_API_KEY
   const authHeader = request.headers.get('authorization');
   const token = authHeader?.replace(/^Bearer\s+/i, '') || '';
-  const validKeys = (process.env.RELAY_API_KEY || '')
-    .split(',')
-    .map((k) => k.trim())
-    .filter(Boolean);
+  const validKeys = getRelayApiKeys();
 
   if (!token || !validKeys.includes(token)) {
     return Response.json(
@@ -35,8 +34,8 @@ export async function GET(request: NextRequest) {
   }
 
   const providerStats = getKeyPoolStats();
-  const globalUsage = await getGlobalUsage();
-  const quota = await checkQuota();
+  const globalUsage = await usageStorage.getGlobalUsage();
+  const quota = await usageStorage.checkQuota();
 
   const providers = Object.entries(PROVIDERS).map(([name, config]) => {
     const stats = providerStats[name];
@@ -54,7 +53,7 @@ export async function GET(request: NextRequest) {
     status: 'ok',
     timestamp: new Date().toISOString(),
     providers,
-    usage: globalUsage || { requests: 0, tokens: 0, lastUsed: 0 },
+    usage: globalUsage || { requests: 0, tokens: 0 },
     quota: {
       daily: { used: quota.dailyUsed, limit: quota.dailyLimit || 'unlimited' },
       monthly: { used: quota.monthlyUsed, limit: quota.monthlyLimit || 'unlimited' },

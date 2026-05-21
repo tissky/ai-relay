@@ -1,55 +1,13 @@
 // ============================================================
-// AI API Relay — Provider Configuration & Routing
+// AI API Relay — Provider Resolver
 // ============================================================
 
-import type { ProviderConfig, ProviderName } from './types';
-
-/** All supported providers and their configurations */
-export const PROVIDERS: Record<ProviderName, ProviderConfig> = {
-  openai: {
-    name: 'openai',
-    displayName: 'OpenAI',
-    baseUrl: 'https://api.openai.com/v1',
-    modelPrefixes: ['gpt-', 'o1-', 'o3-', 'o4-', 'chatgpt-', 'dall-e-'],
-    headerFormat: 'openai',
-    envKeyField: 'OPENAI_KEYS',
-    envBaseUrlField: 'OPENAI_BASE_URL',
-  },
-  anthropic: {
-    name: 'anthropic',
-    displayName: 'Anthropic (Claude)',
-    baseUrl: 'https://api.anthropic.com/v1',
-    modelPrefixes: ['claude-'],
-    headerFormat: 'anthropic',
-    envKeyField: 'CLAUDE_KEYS',
-    envBaseUrlField: 'CLAUDE_BASE_URL',
-  },
-  deepseek: {
-    name: 'deepseek',
-    displayName: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com/v1',
-    modelPrefixes: ['deepseek-'],
-    headerFormat: 'openai',
-    envKeyField: 'DEEPSEEK_KEYS',
-    envBaseUrlField: 'DEEPSEEK_BASE_URL',
-  },
-  xiaomi: {
-    name: 'xiaomi',
-    displayName: 'Xiaomi (MiMo)',
-    baseUrl: 'https://api.xiaomi.com/v1',
-    modelPrefixes: ['mimo-'],
-    headerFormat: 'openai',
-    envKeyField: 'XIAOMI_KEYS',
-    envBaseUrlField: 'XIAOMI_BASE_URL',
-  },
-};
+import type { ProviderConfig } from './types';
+import { PROVIDERS } from './registry';
 
 /**
  * Model alias mapping — lets users request common names that get
  * transparently rewritten to the actual upstream model ID.
- *
- * Add entries here when you want to support shortcuts like "gpt-4"
- * routing to "gpt-4-turbo", or custom aliases for your team.
  */
 const MODEL_ALIASES: Record<string, string> = {
   'gpt-4': 'gpt-4-turbo',
@@ -65,8 +23,7 @@ const MODEL_ALIASES: Record<string, string> = {
  * Returns the original name if no alias exists.
  */
 export function resolveModelAlias(model: string): string {
-  const lower = model.toLowerCase();
-  return MODEL_ALIASES[lower] || model;
+  return MODEL_ALIASES[model.toLowerCase()] || model;
 }
 
 /**

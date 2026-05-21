@@ -3,19 +3,20 @@
 // ============================================================
 
 import { NextRequest } from 'next/server';
-import { getKeyPoolStats } from '@/lib/key-manager';
-import { getGlobalUsage } from '@/lib/usage';
+import { getKeyPoolStats } from '@/lib/relay';
+import { KVUsageStorage } from '@/lib/usage';
 import { PROVIDERS } from '@/lib/providers';
 
 export const runtime = 'edge';
 
+const usageStorage = new KVUsageStorage();
+
 export async function GET(request: NextRequest) {
-  // Simple auth check (optional — could be public)
   const url = new URL(request.url);
   const showDetails = url.searchParams.get('detail') === '1';
 
   const providerStats = getKeyPoolStats();
-  const globalUsage = await getGlobalUsage();
+  const globalUsage = await usageStorage.getGlobalUsage();
 
   const providers = Object.entries(PROVIDERS).map(([name, config]) => {
     const stats = providerStats[name];

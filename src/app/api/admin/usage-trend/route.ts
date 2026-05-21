@@ -3,9 +3,12 @@
 // ============================================================
 
 import { NextRequest } from 'next/server';
-import { getUsageTrend } from '@/lib/usage';
+import { getRelayApiKeys } from '@/lib/relay';
+import { KVUsageStorage } from '@/lib/usage';
 
 export const runtime = 'edge';
+
+const usageStorage = new KVUsageStorage();
 
 /** Valid range options per granularity */
 const VALID_RANGES: Record<string, string[]> = {
@@ -23,20 +26,13 @@ const DEFAULT_RANGES: Record<string, string> = {
 /**
  * GET /api/admin/usage-trend?granularity=day|week|month&range=7d|30d|4w|12w|6m|12m
  *
- * Returns token consumption trend data at the requested granularity:
- * - Global usage (requests, promptTokens, completionTokens)
- * - Per-provider breakdown
- *
- * Requires Bearer token authentication (same RELAY_API_KEY).
+ * Returns token consumption trend data at the requested granularity.
  */
 export async function GET(request: NextRequest) {
-  // Auth check — require RELAY_API_KEY
+  // Auth check
   const authHeader = request.headers.get('authorization');
   const token = authHeader?.replace(/^Bearer\s+/i, '') || '';
-  const validKeys = (process.env.RELAY_API_KEY || '')
-    .split(',')
-    .map((k) => k.trim())
-    .filter(Boolean);
+  const validKeys = getRelayApiKeys();
 
   if (!token || !validKeys.includes(token)) {
     return Response.json(
@@ -49,7 +45,6 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const granularity = (searchParams.get('granularity') || 'day') as 'day' | 'week' | 'month';
 
-  // Validate granularity
   if (!['day', 'week', 'month'].includes(granularity)) {
     return Response.json(
       { error: { message: 'Invalid granularity. Use day|week|month.', code: 400 } },
@@ -57,12 +52,11 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Parse and validate range
   const rangeParam = searchParams.get('range') || DEFAULT_RANGES[granularity];
   const validRange = VALID_RANGES[granularity];
   const range = validRange.includes(rangeParam) ? rangeParam : DEFAULT_RANGES[granularity];
 
-  const trend = await getUsageTrend(range, granularity);
+  const trend = await usageStorage.getUsageTrend(range, granularity);
 
   return Response.json({
     range,

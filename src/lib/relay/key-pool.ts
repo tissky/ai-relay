@@ -2,10 +2,10 @@
 // AI API Relay — Key Pool Management & Rotation
 // ============================================================
 
-import type { ProviderName, ApiKey, KeyPool, ProviderConfig } from './types';
+import type { ApiKey, KeyPool, ProviderConfig } from '../providers/types';
 
 /** In-memory key pools (cold start init, refreshed periodically) */
-const keyPools = new Map<ProviderName, KeyPool>();
+const keyPools = new Map<string, KeyPool>();
 
 /** Cooldown tracking: key hash → expiry timestamp */
 const cooldowns = new Map<string, number>();
@@ -14,9 +14,9 @@ const COOLDOWN_MS = 60_000; // 60s cooldown after 429/5xx
 
 /**
  * Hash a key to a short identifier (for KV storage / logging).
- * Uses a simple djb2 hash — fast, no crypto dependency.
+ * Uses djb2 — fast, no crypto dependency.
  */
-function hashKey(key: string): string {
+export function hashKey(key: string): string {
   let hash = 5381;
   for (let i = 0; i < key.length; i++) {
     hash = ((hash << 5) + hash + key.charCodeAt(i)) >>> 0;
@@ -27,7 +27,7 @@ function hashKey(key: string): string {
 /**
  * Parse comma-separated API keys from environment variable.
  */
-function parseKeys(envValue: string | undefined, provider: ProviderName): ApiKey[] {
+function parseKeys(envValue: string | undefined, provider: string): ApiKey[] {
   if (!envValue) return [];
   return envValue
     .split(',')
@@ -72,21 +72,18 @@ export function selectKey(config: ProviderConfig): ApiKey | null {
   const now = Date.now();
   const totalKeys = pool.keys.length;
 
-  // Try each key starting from current counter position
   for (let i = 0; i < totalKeys; i++) {
     const idx = (pool.counter + i) % totalKeys;
     const candidate = pool.keys[idx];
     const cooldownUntil = cooldowns.get(candidate.hash);
 
     if (!cooldownUntil || now >= cooldownUntil) {
-      // This key is available
       pool.counter = (idx + 1) % totalKeys;
       return candidate;
     }
   }
 
   // All keys on cooldown — return the one with earliest expiry
-  // (still better than returning null and failing)
   let earliest = pool.keys[0];
   let earliestTime = cooldowns.get(earliest.hash) || Infinity;
   for (const key of pool.keys) {
@@ -108,7 +105,7 @@ export function markCooldown(key: ApiKey): void {
 }
 
 /**
- * Get key pool stats for the admin/status page.
+ * Get key pool stats for admin/status page.
  */
 export function getKeyPoolStats(): Record<string, { total: number; available: number }> {
   const now = Date.now();

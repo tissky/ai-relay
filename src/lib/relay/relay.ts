@@ -91,7 +91,12 @@ export async function relayRequest(
     const fallbackProvider = PROVIDERS[provider.fallbackProvider];
     if (fallbackProvider) {
       console.log(`Primary provider ${provider.displayName} failed, trying fallback: ${fallbackProvider.displayName}`);
-      const fallbackResult = await tryProviderWithRetries(fallbackProvider, body, resolvedModel, apiKey, maxRetries);
+      // BUG FIX: Do NOT pass primary's apiKey to fallback — each provider has its own key pool.
+      // Also use fallback's own pool size for maxRetries.
+      const fallbackKey = selectKey(fallbackProvider);
+      const fallbackPool = getKeyPool(fallbackProvider);
+      const fallbackMaxRetries = Math.min(fallbackPool.keys.length, 3);
+      const fallbackResult = await tryProviderWithRetries(fallbackProvider, body, resolvedModel, fallbackKey, fallbackMaxRetries);
       if (fallbackResult.result) {
         return fallbackResult.result;
       }

@@ -6,7 +6,7 @@
 // ============================================================
 
 import { NextRequest } from 'next/server';
-import { PROVIDERS } from '@/lib/providers';
+import { getAllProviders } from '@/lib/providers';
 import { getKeyPoolStats, initAllKeyPools, validateAuth } from '@/lib/relay';
 import type { ModelInfo } from '@/lib/providers/types';
 
@@ -19,13 +19,14 @@ const RELAY_CREATED = Math.floor(Date.now() / 1000);
  * Build the full models list from provider registry.
  */
 async function getAllModels(): Promise<Array<ModelInfo & { owned_by: string; configured: boolean }>> {
-  await initAllKeyPools(PROVIDERS);
+  const allProviders = await getAllProviders();
+  await initAllKeyPools(allProviders);
   const poolStats = getKeyPoolStats();
 
   const models: Array<ModelInfo & { owned_by: string; configured: boolean }> = [];
 
-  for (const [providerId, config] of Object.entries(PROVIDERS)) {
-    const configured = !!process.env[config.envKeyField];
+  for (const [providerId, config] of Object.entries(allProviders)) {
+    const configured = config.envKeyField ? (!!process.env[config.envKeyField] || (poolStats[providerId]?.total > 0)) : (poolStats[providerId]?.total > 0);
     const hasKeys = (poolStats[providerId]?.available || 0) > 0;
 
     if (config.models && config.models.length > 0) {

@@ -6,7 +6,7 @@
 import { NextRequest } from 'next/server';
 import { requireAdminAuth, getManagedKeys } from '@/lib/admin';
 import { hashKey } from '@/lib/relay';
-import { PROVIDERS } from '@/lib/providers';
+import { getAllProviders } from '@/lib/providers';
 import { buildHeaders, transformToAnthropic } from '@/lib/relay/transform';
 import { getUpstreamUrl, resolveFallbackModel, resolveUpstreamModel } from '@/lib/providers/resolver';
 import type { ChatCompletionRequest } from '@/lib/types';
@@ -26,7 +26,8 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   if (authErr) return authErr;
 
   const { provider: providerName } = await params;
-  const provider = PROVIDERS[providerName];
+  const allProviders = await getAllProviders();
+  const provider = allProviders[providerName];
   if (!provider) {
     return Response.json(
       { error: { message: `Unknown provider: ${providerName}`, code: 404 } },
@@ -50,10 +51,9 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   } else if (body.hash && typeof body.hash === 'string' && body.hash.trim().length > 0) {
     // Locate plaintext key from managed KV or static env keys by matching hash
     const managed = await getManagedKeys(providerName);
-    const envKeys = (process.env[provider.envKeyField] || '')
-      .split(',')
-      .map((k) => k.trim())
-      .filter(Boolean);
+    const envKeys = provider.envKeyField
+      ? (process.env[provider.envKeyField] || '').split(',').map((k) => k.trim()).filter(Boolean)
+      : [];
     const currentKeys = managed ?? envKeys;
     const match = currentKeys.find((k) => hashKey(k) === body.hash);
     if (!match) {
@@ -66,10 +66,9 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   } else {
     // Default to the first configured key in the provider's key pool
     const managed = await getManagedKeys(providerName);
-    const envKeys = (process.env[provider.envKeyField] || '')
-      .split(',')
-      .map((k) => k.trim())
-      .filter(Boolean);
+    const envKeys = provider.envKeyField
+      ? (process.env[provider.envKeyField] || '').split(',').map((k) => k.trim()).filter(Boolean)
+      : [];
     const currentKeys = managed ?? envKeys;
     if (currentKeys.length > 0) {
       testKey = currentKeys[0];
@@ -88,7 +87,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   const isAnthropic = provider.headerFormat === 'anthropic';
   const targetModel = (body.model && typeof body.model === 'string' && body.model.trim().length > 0)
     ? body.model.trim()
-    : resolveFallbackModel('gpt-3.5-turbo', providerName);
+    : await resolveFallbackModel('gpt-3.5-turbo', providerName);
   const upstreamModel = resolveUpstreamModel(targetModel, provider);
 
   const testBody: ChatCompletionRequest = {

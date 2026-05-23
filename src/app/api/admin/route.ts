@@ -6,7 +6,7 @@ import { NextRequest } from 'next/server';
 import { getKeyPoolStats, initAllKeyPools } from '@/lib/relay';
 import { requireAdminAuth } from '@/lib/admin';
 import { KVUsageStorage } from '@/lib/usage';
-import { PROVIDERS } from '@/lib/providers';
+import { getAllProviders } from '@/lib/providers';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -27,8 +27,9 @@ export async function GET(request: NextRequest) {
   const authResponse = requireAdminAuth(request);
   if (authResponse) return authResponse;
 
+  const allProviders = await getAllProviders();
   // Eagerly init all provider pools so stats reflect all configured providers
-  await initAllKeyPools(PROVIDERS);
+  await initAllKeyPools(allProviders);
   const providerStats = getKeyPoolStats();
 
   // Fire all 4 KV queries in parallel instead of sequential awaits
@@ -39,16 +40,20 @@ export async function GET(request: NextRequest) {
     usageStorage.getKeyErrors(),
   ]);
 
-  const providers = Object.entries(PROVIDERS).map(([name, config]) => {
+  const providers = Object.entries(allProviders).map(([name, config]) => {
     const stats = providerStats[name];
     return {
       name: config.displayName,
       id: name,
       keyCount: stats?.total || 0,
       availableKeys: stats?.available || 0,
-      configured: !!process.env[config.envKeyField],
+      configured: config.envKeyField ? (!!process.env[config.envKeyField] || (stats?.total ? stats.total > 0 : false)) : (stats?.total ? stats.total > 0 : false),
+      isCustom: config.isCustom || false,
       modelPrefixes: config.modelPrefixes,
-      models: (config.models || []).map(m => ({ id: m.id, displayName: m.displayName })),
+      models: config.models || [],
+      envKeyField: config.envKeyField,
+      baseUrl: config.baseUrl,
+      headerFormat: config.headerFormat,
     };
   });
 

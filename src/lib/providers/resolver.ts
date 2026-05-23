@@ -4,6 +4,7 @@
 
 import type { ProviderConfig } from './types';
 import { PROVIDERS } from './registry';
+import { getCustomProviders } from '../admin/admin-config';
 
 /**
  * Model alias mapping — lets users request common names that get
@@ -31,13 +32,50 @@ export function resolveModelAlias(model: string): string {
  * Automatically resolves aliases before matching.
  * Returns null if no provider matches.
  */
-export function resolveProvider(model: string): ProviderConfig | null {
+let cachedProviders: Record<string, ProviderConfig> | null = null;
+let cacheTimestamp = 0;
+
+export async function getAllProviders(): Promise<Record<string, ProviderConfig>> {
+  const now = Date.now();
+  if (cachedProviders && now - cacheTimestamp < 5000) {
+    return cachedProviders;
+  }
+  try {
+    const custom = await getCustomProviders();
+    const merged = { ...PROVIDERS };
+    for (const [name, config] of Object.entries(custom)) {
+      merged[name] = {
+        ...config,
+        isCustom: true,
+      };
+    }
+    cachedProviders = merged;
+    cacheTimestamp = now;
+    return merged;
+  } catch (err) {
+    console.error('[getAllProviders] Error loading custom providers:', err);
+    return PROVIDERS;
+  }
+}
+
+export function clearProvidersCache(): void {
+  cachedProviders = null;
+  cacheTimestamp = 0;
+}
+
+/**
+ * Resolve which provider a model name belongs to.
+ * Automatically resolves aliases before matching.
+ * Returns null if no provider matches.
+ */
+export async function resolveProvider(model: string): Promise<ProviderConfig | null> {
   const resolved = resolveModelAlias(model);
   const lowerModel = resolved.toLowerCase();
   let bestProvider: ProviderConfig | null = null;
   let longestPrefixLength = 0;
 
-  for (const provider of Object.values(PROVIDERS)) {
+  const allProviders = await getAllProviders();
+  for (const provider of Object.values(allProviders)) {
     for (const prefix of provider.modelPrefixes) {
       if (lowerModel.startsWith(prefix)) {
         if (prefix.length > longestPrefixLength) {
@@ -82,9 +120,10 @@ export function getUpstreamUrl(provider: ProviderConfig): string {
  * Resolves a model ID suitable for the fallback provider based on the original model ID.
  * Maps reasoning models to reasoning models, cheap models to cheap models, and standard models to standard models.
  */
-export function resolveFallbackModel(originalModel: string, targetProviderName: string): string {
+export async function resolveFallbackModel(originalModel: string, targetProviderName: string): Promise<string> {
   const lowerModel = originalModel.toLowerCase();
-  const targetProvider = PROVIDERS[targetProviderName];
+  const allProviders = await getAllProviders();
+  const targetProvider = allProviders[targetProviderName];
 
   // 1. If the original model already starts with one of the target provider's prefixes,
   // we can use the original model directly.

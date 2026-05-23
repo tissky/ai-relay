@@ -4,7 +4,7 @@
 
 import type { ChatCompletionRequest } from '../types';
 import type { RelayResult, ProviderConfig, ApiKey } from '../providers/types';
-import { resolveProvider, getUpstreamUrl, resolveModelAlias, resolveFallbackModel, resolveUpstreamModel, PROVIDERS } from '../providers';
+import { resolveProvider, getUpstreamUrl, resolveModelAlias, resolveFallbackModel, resolveUpstreamModel, getAllProviders } from '../providers';
 import { selectKey, markCooldown, getKeyPool } from './key-pool';
 import { buildHeaders, transformToAnthropic } from './transform';
 import { RelayError } from '../errors';
@@ -45,7 +45,7 @@ function recordError(
 export async function relayRequest(
   body: ChatCompletionRequest
 ): Promise<RelayResult> {
-  const provider = resolveProvider(body.model);
+  const provider = await resolveProvider(body.model);
   if (!provider) {
     throw new RelayError(
       `Unknown model: ${body.model}. Supported prefixes: gpt-, claude-, deepseek-, mimo-`,
@@ -106,7 +106,8 @@ export async function relayRequest(
     const fbName = colonIdx >= 0 ? fbEntry.slice(0, colonIdx) : fbEntry;
     const explicitModel = colonIdx >= 0 ? fbEntry.slice(colonIdx + 1) : null;
 
-    const fbProvider = PROVIDERS[fbName];
+    const allProviders = await getAllProviders();
+    const fbProvider = allProviders[fbName];
     if (!fbProvider) {
       console.warn(`[fallback] Unknown provider: ${fbName}, skipping`);
       errors.push({ provider: fbName, error: 'Unknown provider' });
@@ -187,7 +188,7 @@ async function tryProviderWithRetries(
     const isAnthropic = provider.headerFormat === 'anthropic';
 
     // Resolve target model and its alias for the current provider
-    const targetModel = resolveFallbackModel(body.model, provider.name);
+    const targetModel = await resolveFallbackModel(body.model, provider.name);
     const resolvedAlias = resolveModelAlias(targetModel);
     // Map virtual model name to real upstream model ID (e.g. mimo-v2.5-pro-coding → mimo-v2.5-pro)
     const resolvedModel = resolveUpstreamModel(resolvedAlias, provider);

@@ -3,7 +3,7 @@
 // Health check endpoint for monitoring and load balancers
 // ============================================================
 
-import { PROVIDERS } from '@/lib/providers';
+import { getAllProviders } from '@/lib/providers';
 import { getKeyPoolStats, initAllKeyPools } from '@/lib/relay';
 
 export const runtime = 'edge';
@@ -11,7 +11,8 @@ export const runtime = 'edge';
 const startTime = Date.now();
 
 export async function GET() {
-  await initAllKeyPools(PROVIDERS);
+  const allProviders = await getAllProviders();
+  await initAllKeyPools(allProviders);
   const poolStats = getKeyPoolStats();
 
   // Count configured and healthy providers
@@ -19,8 +20,8 @@ export async function GET() {
   let totalKeys = 0;
   let availableKeys = 0;
 
-  for (const [name, config] of Object.entries(PROVIDERS)) {
-    const hasKeys = !!process.env[config.envKeyField];
+  for (const [name, config] of Object.entries(allProviders)) {
+    const hasKeys = config.envKeyField ? (!!process.env[config.envKeyField] || (poolStats[name]?.total > 0)) : (poolStats[name]?.total > 0);
     if (hasKeys) {
       configuredProviders++;
       const stats = poolStats[name];
@@ -46,7 +47,7 @@ export async function GET() {
       version: '1.1.0',
       providers: {
         configured: configuredProviders,
-        total: Object.keys(PROVIDERS).length,
+        total: Object.keys(allProviders).length,
       },
       keys: {
         total: totalKeys,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface ProviderInfo {
   name: string;
@@ -9,6 +9,22 @@ interface ProviderInfo {
   availableKeys: number;
   configured: boolean;
   modelPrefixes: string[];
+  models?: Array<{
+    id: string;
+    displayName: string;
+    contextWindow: number;
+    maxOutput?: number;
+    supportsStream?: boolean;
+    supportsVision?: boolean;
+    supportsTools?: boolean;
+    pricing?: {
+      input: number;
+      output: number;
+    };
+  }>;
+  isCustom?: boolean;
+  baseUrl?: string;
+  headerFormat?: 'openai' | 'anthropic' | 'azure';
   errors?: Record<string, number>;
   keyErrors?: Array<{
     keyHash: string;
@@ -72,6 +88,12 @@ interface KeysTabProps {
   onTestInputKey: () => Promise<void>;
   onSaveFallbacks: (newChain: string[]) => Promise<void>;
   onResetFallbacks: () => Promise<void>;
+  customProviderModalOpen: boolean;
+  setCustomProviderModalOpen: (val: boolean) => void;
+  editingCustomProvider: any;
+  setEditingCustomProvider: (val: any) => void;
+  onSaveCustomProvider: (provider: any) => Promise<void>;
+  onDeleteCustomProvider: (name: string) => Promise<void>;
 }
 
 export default function KeysTab({
@@ -99,8 +121,86 @@ export default function KeysTab({
   onTestInputKey,
   onSaveFallbacks,
   onResetFallbacks,
+  customProviderModalOpen,
+  setCustomProviderModalOpen,
+  editingCustomProvider,
+  setEditingCustomProvider,
+  onSaveCustomProvider,
+  onDeleteCustomProvider,
 }: KeysTabProps) {
   const [selectedModels, setSelectedModels] = useState<Record<string, string>>({});
+
+  // Local states for custom provider form
+  const [formId, setFormId] = useState('');
+  const [formDisplayName, setFormDisplayName] = useState('');
+  const [formBaseUrl, setFormBaseUrl] = useState('');
+  const [formHeaderFormat, setFormHeaderFormat] = useState<'openai' | 'anthropic' | 'azure'>('openai');
+  const [formModelPrefixes, setFormModelPrefixes] = useState('');
+  const [formModels, setFormModels] = useState<any[]>([]);
+
+  // Sync edit mode fields
+  useEffect(() => {
+    if (editingCustomProvider) {
+      setFormId(editingCustomProvider.id);
+      setFormDisplayName(editingCustomProvider.name || '');
+      setFormBaseUrl(editingCustomProvider.baseUrl || '');
+      setFormHeaderFormat(editingCustomProvider.headerFormat || 'openai');
+      setFormModelPrefixes((editingCustomProvider.modelPrefixes || []).join(', '));
+      setFormModels(editingCustomProvider.models || []);
+    } else {
+      setFormId('');
+      setFormDisplayName('');
+      setFormBaseUrl('');
+      setFormHeaderFormat('openai');
+      setFormModelPrefixes('');
+      setFormModels([]);
+    }
+  }, [editingCustomProvider, customProviderModalOpen]);
+
+  // Model helper callbacks
+  const handleFormAddModel = () => {
+    setFormModels([
+      ...formModels,
+      {
+        id: '',
+        displayName: '',
+        contextWindow: 128000,
+        maxOutput: 16384,
+        supportsStream: true,
+        supportsVision: false,
+        supportsTools: false,
+        pricing: { input: 0, output: 0 }
+      }
+    ]);
+  };
+
+  const handleFormUpdateModel = (index: number, fields: any) => {
+    const updated = [...formModels];
+    updated[index] = { ...updated[index], ...fields };
+    setFormModels(updated);
+  };
+
+  const handleFormRemoveModel = (index: number) => {
+    setFormModels(formModels.filter((_, i) => i !== index));
+  };
+
+  // Compute all existing models across providers for cloning
+  const allExistingModels = data.providers.flatMap((p) => {
+    const models = p.models || [];
+    return models.map((m) => {
+      return {
+        id: m.id,
+        displayName: m.displayName,
+        contextWindow: m.contextWindow,
+        maxOutput: m.maxOutput,
+        supportsStream: m.supportsStream,
+        supportsVision: m.supportsVision,
+        supportsTools: m.supportsTools,
+        pricing: m.pricing,
+        providerName: p.name
+      };
+    });
+  });
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <style dangerouslySetInnerHTML={{ __html: `
@@ -512,7 +612,8 @@ export default function KeysTab({
                             </button>
                           </div>
                         </div>
-                      })
+                      );
+                    })
                     ) : (
                       <div style={{ color: '#9ca3af', fontSize: '0.9rem', padding: '1.5rem', textAlign: 'center' }}>
                         {t.noKeysConfigured}

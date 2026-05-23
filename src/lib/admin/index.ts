@@ -10,6 +10,9 @@ export {
   getCustomQuota,
   setCustomQuota,
   clearCustomQuota,
+  getCustomProviders,
+  saveCustomProvider,
+  deleteCustomProvider,
 } from './admin-config';
 
 export { requireAdminAuth, getRelayApiKeys, getRelayAdminKeys } from './auth';

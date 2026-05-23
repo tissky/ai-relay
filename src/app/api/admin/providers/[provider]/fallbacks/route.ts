@@ -5,7 +5,7 @@
 
 import { NextRequest } from 'next/server';
 import { requireAdminAuth, getFallbackChain, setFallbackChain, clearFallbackChain } from '@/lib/admin';
-import { PROVIDERS } from '@/lib/providers';
+import { getAllProviders } from '@/lib/providers';
 
 export const runtime = 'nodejs';
 
@@ -21,10 +21,11 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
   if (authErr) return authErr;
 
   const { provider } = await params;
-  const config = PROVIDERS[provider];
+  const allProviders = await getAllProviders();
+  const config = allProviders[provider];
   if (!config) {
     return Response.json(
-      { error: { message: `Unknown provider: ${provider}. Valid: ${Object.keys(PROVIDERS).join(', ')}`, code: 404 } },
+      { error: { message: `Unknown provider: ${provider}. Valid: ${Object.keys(allProviders).join(', ')}`, code: 404 } },
       { status: 404 }
     );
   }
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
 
   // Build available models per provider for the UI
   const availableModels: Record<string, { id: string; displayName: string }[]> = {};
-  for (const [name, provConfig] of Object.entries(PROVIDERS)) {
+  for (const [name, provConfig] of Object.entries(allProviders)) {
     if (name === provider) continue; // skip self
     availableModels[name] = (provConfig.models || []).map(m => ({ id: m.id, displayName: m.displayName }));
   }
@@ -62,7 +63,8 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
   if (authErr) return authErr;
 
   const { provider } = await params;
-  const config = PROVIDERS[provider];
+  const allProviders = await getAllProviders();
+  const config = allProviders[provider];
   if (!config) {
     return Response.json(
       { error: { message: `Unknown provider: ${provider}`, code: 404 } },
@@ -99,15 +101,15 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
     const providerName = colonIdx >= 0 ? fb.slice(0, colonIdx) : fb;
     const modelId = colonIdx >= 0 ? fb.slice(colonIdx + 1) : null;
 
-    if (!PROVIDERS[providerName]) {
+    if (!allProviders[providerName]) {
       return Response.json(
-        { error: { message: `Invalid fallback provider: ${providerName}. Valid: ${Object.keys(PROVIDERS).join(', ')}`, code: 400 } },
+        { error: { message: `Invalid fallback provider: ${providerName}. Valid: ${Object.keys(allProviders).join(', ')}`, code: 400 } },
         { status: 400 }
       );
     }
     // If a model is specified, validate it exists in the target provider's model list
     if (modelId) {
-      const targetModels = PROVIDERS[providerName].models || [];
+      const targetModels = allProviders[providerName].models || [];
       if (!targetModels.some(m => m.id === modelId)) {
         return Response.json(
           { error: { message: `Invalid model '${modelId}' for provider '${providerName}'. Valid: ${targetModels.map(m => m.id).join(', ')}`, code: 400 } },
@@ -136,7 +138,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Params 
   if (authErr) return authErr;
 
   const { provider } = await params;
-  const config = PROVIDERS[provider];
+  const allProviders = await getAllProviders();
+  const config = allProviders[provider];
   if (!config) {
     return Response.json(
       { error: { message: `Unknown provider: ${provider}`, code: 404 } },

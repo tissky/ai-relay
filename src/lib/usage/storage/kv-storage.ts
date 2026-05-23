@@ -10,27 +10,29 @@ import type {
   QuotaStatus,
 } from '../sdk';
 import { withTimeout } from '@/lib/utils/timeout';
-
-/** Known provider names for trend queries */
-const PROVIDER_NAMES = ['openai', 'anthropic', 'deepseek', 'xiaomi_sgp_coding', 'xiaomi', 'xiaomi_coding', 'lpgpt', 'xiaomi_tudo'];
+import { getAllProviders } from '@/lib/providers';
 
 /**
  * Get today's date string in YYYY-MM-DD format.
  */
+function getBeijingDate(d: Date = new Date()): Date {
+  return new Date(d.getTime() + 8 * 60 * 60 * 1000);
+}
+
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return getBeijingDate().toISOString().slice(0, 10);
 }
 
 function thisMonth(): string {
-  return new Date().toISOString().slice(0, 7);
+  return getBeijingDate().toISOString().slice(0, 7);
 }
 
 function dateRange(days: number): string[] {
   const dates: string[] = [];
-  const now = new Date();
+  const nowBeijing = getBeijingDate();
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
+    const d = new Date(nowBeijing);
+    d.setUTCDate(d.getUTCDate() - i);
     dates.push(d.toISOString().slice(0, 10));
   }
   return dates;
@@ -268,10 +270,13 @@ export class KVUsageStorage implements UsageStorage {
       const date = today();
       const result: Record<string, Record<string, number>> = {};
 
+      const allProviders = await getAllProviders();
+      const providerNames = Object.keys(allProviders);
+
       // Fetch all provider error stats in parallel
       const providerResults = await withTimeout(
         Promise.all(
-          PROVIDER_NAMES.map(async (provider) => {
+          providerNames.map(async (provider) => {
             const raw = await kv.hgetall(`error:${provider}:${date}`);
             return { provider, raw };
           })
@@ -427,11 +432,14 @@ export class KVUsageStorage implements UsageStorage {
       if (!kv) return null;
 
       const date = today();
+      const allProviders = await getAllProviders();
+      const providerNames = Object.keys(allProviders);
+
       const [raw, providerResults] = await withTimeout(
         Promise.all([
           kv.hgetall(`usage:daily:${date}`) as Promise<Record<string, unknown> | null>,
           Promise.all(
-            PROVIDER_NAMES.map(async (provider) => {
+            providerNames.map(async (provider) => {
               const pRaw = await kv.hgetall(`usage:provider:${provider}:daily:${date}`);
               return { provider, raw: pRaw };
             })
@@ -499,7 +507,10 @@ export class KVUsageStorage implements UsageStorage {
         return parseDailyPoint(date, raw as Record<string, unknown> | null);
       });
 
-      const providerPromises = PROVIDER_NAMES.map(async (provider) => {
+      const allProviders = await getAllProviders();
+      const providerNames = Object.keys(allProviders);
+
+      const providerPromises = providerNames.map(async (provider) => {
         const dataPromises = dates.map(async (date) => {
           const raw = await kv.hgetall(`usage:provider:${provider}:daily:${date}`);
           return parseDailyPoint(date, raw as Record<string, unknown> | null);
@@ -589,13 +600,20 @@ export class KVUsageStorage implements UsageStorage {
       if (dailyLimit > 0 && dailyUsed >= dailyLimit) {
         const now = new Date();
         const midnight = new Date(now);
-        midnight.setUTCHours(24, 0, 0, 0);
+        midnight.setUTCHours(16, 0, 0, 0); // 16:00 UTC is 00:00 Beijing time next day
+        if (now.getUTCHours() >= 16) {
+          midnight.setUTCDate(midnight.getUTCDate() + 1);
+        }
         const retryAfter = Math.ceil((midnight.getTime() - now.getTime()) / 1000);
         result = { allowed: false, dailyUsed, dailyLimit, monthlyUsed, monthlyLimit, retryAfter, isOverride };
       } else if (monthlyLimit > 0 && monthlyUsed >= monthlyLimit) {
         const now = new Date();
-        const nextMonth = new Date(now.getUTCFullYear(), now.getUTCMonth() + 1, 1);
-        const retryAfter = Math.ceil((nextMonth.getTime() - now.getTime()) / 1000);
+        const nextMonthBeijing = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+        nextMonthBeijing.setUTCHours(0, 0, 0, 0);
+        nextMonthBeijing.setUTCDate(1);
+        nextMonthBeijing.setUTCMonth(nextMonthBeijing.getUTCMonth() + 1);
+        const nextMonthAbsolute = new Date(nextMonthBeijing.getTime() - 8 * 60 * 60 * 1000);
+        const retryAfter = Math.ceil((nextMonthAbsolute.getTime() - now.getTime()) / 1000);
         result = { allowed: false, dailyUsed, dailyLimit, monthlyUsed, monthlyLimit, retryAfter, isOverride };
       } else {
         result = { allowed: true, dailyUsed, dailyLimit, monthlyUsed, monthlyLimit, isOverride };

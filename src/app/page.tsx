@@ -1,4 +1,4 @@
-import { PROVIDERS } from '@/lib/providers';
+import { getAllProviders } from '@/lib/providers';
 
 function LogoIcon({ size = 32 }: { size?: number }) {
   return (
@@ -25,8 +25,9 @@ function LogoIcon({ size = 32 }: { size?: number }) {
   );
 }
 
-export default function Home() {
-  const providers = Object.entries(PROVIDERS).map(([id, config]) => ({
+export default async function Home() {
+  const allProviders = await getAllProviders();
+  const providers = Object.entries(allProviders).map(([id, config]) => ({
     id,
     name: config.displayName,
     prefixes: config.modelPrefixes,

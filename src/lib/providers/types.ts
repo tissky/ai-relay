@@ -18,6 +18,7 @@ export interface ProviderConfig {
   modelMapping?: Record<string, string>; // User-facing model ID → upstream model ID (for virtual model names)
   fallbackProvider?: string;       // Fallback provider name when this one fails (single, legacy)
   fallbackProviders?: string[];    // Chain of fallback providers (tried in order, supersede fallbackProvider)
+  isCustom?: boolean;              // Distinguish custom KV providers from static ones
 }
 
 /**

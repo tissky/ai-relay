@@ -10,6 +10,10 @@ interface ProviderInfo {
   availableKeys: number;
   configured: boolean;
   modelPrefixes: string[];
+  models?: Array<{
+    id: string;
+    displayName: string;
+  }>;
   errors?: Record<string, number>;
   keyErrors?: Array<{
     keyHash: string;

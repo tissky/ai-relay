@@ -13,7 +13,23 @@ interface ProviderInfo {
   availableKeys: number;
   configured: boolean;
   modelPrefixes: string[];
-  models?: Array<{ id: string; displayName: string }>;
+  models?: Array<{
+    id: string;
+    displayName: string;
+    contextWindow: number;
+    maxOutput?: number;
+    supportsStream?: boolean;
+    supportsVision?: boolean;
+    supportsTools?: boolean;
+    pricing?: {
+      input: number;
+      output: number;
+    };
+  }>;
+  isCustom?: boolean;
+  baseUrl?: string;
+  headerFormat?: 'openai' | 'anthropic' | 'azure';
+  envKeyField?: string;
   errors?: Record<string, number>;
   keyErrors?: Array<{
     keyHash: string;
@@ -86,6 +102,38 @@ const TRANSLATIONS = {
     confirmResetQuota: '您确定要重置限额配置为环境变量默认值吗？',
     alertSaveQuotaFailed: '保存限额配置失败',
     alertResetQuotaFailed: '重置限额配置失败',
+    addCustomProvider: '➕ 添加自定义服务商',
+    editCustomProvider: '✏️ 编辑服务商',
+    deleteCustomProviderConfirm: '您确定要删除此自定义服务商及与其关联的所有密钥和故障转移配置吗？',
+    providerId: '服务商 ID (唯一, 英文字母/数字/下划线):',
+    displayName: '显示名称:',
+    baseUrl: 'Base URL (必须以 https:// 开头):',
+    headerFormat: '认证头部格式:',
+    modelPrefixes: '模型前缀 (逗号分隔):',
+    modelsList: '模型列表:',
+    addModel: '➕ 添加模型',
+    removeModel: '删除模型',
+    reuseExistingModel: '重用现有模型:',
+    customInput: '自定义输入',
+    modelId: '模型 ID:',
+    modelDisplayName: '模型显示名称:',
+    contextWindow: '上下文窗口 (Tokens):',
+    maxOutput: '最大输出 (Tokens):',
+    supportsStream: '支持流式传输',
+    supportsVision: '支持视觉输入',
+    supportsTools: '支持工具调用',
+    inputPricing: '输入价格 (USD/1M tokens):',
+    outputPricing: '输出价格 (USD/1M tokens):',
+    saveProvider: '保存服务商',
+    cancel: '取消',
+    invalidProviderId: '服务商 ID 仅能包含字母、数字和下划线',
+    invalidBaseUrl: 'Base URL 必须以 https:// 开头',
+    msgProviderSaved: '自定义服务商保存成功',
+    msgProviderDeleted: '自定义服务商删除成功',
+    alertSaveProviderFailed: '保存服务商失败',
+    alertDeleteProviderFailed: '删除服务商失败',
+    alertVerificationRequestFailed: '验证请求失败',
+    deployTime: '最近部署时间',
 
     // Today's Usage
     todaysUsage: '📈 今日消耗概览',
@@ -200,9 +248,7 @@ const TRANSLATIONS = {
     alertDeleteFailed: '删除密钥失败',
     alertAddFailed: '添加密钥失败',
     alertSaveFallbackFailed: '保存回退链失败',
-    alertResetFallbackFailed: '重置回退链失败',
-    alertVerificationRequestFailed: '验证请求失败',
-    deployTime: '最近部署时间'
+    alertResetFallbackFailed: '重置回退链失败'
   },
   en: {
     // Login
@@ -243,6 +289,38 @@ const TRANSLATIONS = {
     confirmResetQuota: 'Are you sure you want to reset quota limits to environment variable defaults?',
     alertSaveQuotaFailed: 'Failed to save quota limits',
     alertResetQuotaFailed: 'Failed to reset quota limits',
+    addCustomProvider: '➕ Add Custom Provider',
+    editCustomProvider: '✏️ Edit Provider',
+    deleteCustomProviderConfirm: 'Are you sure you want to delete this custom provider along with all its keys and fallback configurations?',
+    providerId: 'Provider ID (Unique, alphanumeric + underscore):',
+    displayName: 'Display Name:',
+    baseUrl: 'Base URL (must start with https://):',
+    headerFormat: 'Header Format:',
+    modelPrefixes: 'Model Prefixes (comma separated):',
+    modelsList: 'Models List:',
+    addModel: '➕ Add Model',
+    removeModel: 'Remove Model',
+    reuseExistingModel: 'Reuse Existing Model:',
+    customInput: 'Custom Input',
+    modelId: 'Model ID:',
+    modelDisplayName: 'Model Display Name:',
+    contextWindow: 'Context Window (Tokens):',
+    maxOutput: 'Max Output (Tokens):',
+    supportsStream: 'Supports Stream',
+    supportsVision: 'Supports Vision',
+    supportsTools: 'Supports Tools',
+    inputPricing: 'Input Price (USD/1M tokens):',
+    outputPricing: 'Output Price (USD/1M tokens):',
+    saveProvider: 'Save Provider',
+    cancel: 'Cancel',
+    invalidProviderId: 'Provider ID must be alphanumeric and underscore only',
+    invalidBaseUrl: 'Base URL must start with https://',
+    msgProviderSaved: 'Custom provider saved successfully',
+    msgProviderDeleted: 'Custom provider deleted successfully',
+    alertSaveProviderFailed: 'Failed to save custom provider',
+    alertDeleteProviderFailed: 'Failed to delete custom provider',
+    alertVerificationRequestFailed: 'Verification request failed',
+    deployTime: 'Last Deployed',
 
     // Today's Usage
     todaysUsage: "📈 Today's Usage",
@@ -357,9 +435,7 @@ const TRANSLATIONS = {
     alertDeleteFailed: 'Failed to delete key',
     alertAddFailed: 'Failed to add key',
     alertSaveFallbackFailed: 'Failed to save fallback chain',
-    alertResetFallbackFailed: 'Failed to reset fallbacks',
-    alertVerificationRequestFailed: 'Verification request failed',
-    deployTime: 'Last Deployed'
+    alertResetFallbackFailed: 'Failed to reset fallbacks'
   }
 };
 
@@ -383,6 +459,10 @@ export default function AdminPage() {
   const [testingInput, setTestingInput] = useState<boolean>(false);
   const [activeFallbacks, setActiveFallbacks] = useState<string[]>([]);
   const [selectedFallbackToAdd, setSelectedFallbackToAdd] = useState('');
+
+  // Custom provider modal states
+  const [customProviderModalOpen, setCustomProviderModalOpen] = useState(false);
+  const [editingCustomProvider, setEditingCustomProvider] = useState<any>(null);
 
   const t = TRANSLATIONS[lang];
 
@@ -734,6 +814,58 @@ export default function AdminPage() {
     }
   };
 
+  const handleSaveCustomProvider = async (provider: any) => {
+    setOperationLoading(true);
+    try {
+      const res = await fetch('/api/admin/providers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(provider),
+      });
+      const resData = await res.json();
+      if (!res.ok) {
+        throw new Error(resData.error?.message || 'Failed to save custom provider');
+      }
+      alert(t.msgProviderSaved);
+      setCustomProviderModalOpen(false);
+      setEditingCustomProvider(null);
+      await fetchData(); // refresh list
+    } catch (e: any) {
+      alert(e.message || t.alertSaveProviderFailed);
+    } finally {
+      setOperationLoading(false);
+    }
+  };
+
+  const handleDeleteCustomProvider = async (name: string) => {
+    if (!confirm(t.deleteCustomProviderConfirm)) return;
+    setOperationLoading(true);
+    try {
+      const res = await fetch('/api/admin/providers', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ name }),
+      });
+      const resData = await res.json();
+      if (!res.ok) {
+        throw new Error(resData.error?.message || 'Failed to delete custom provider');
+      }
+      alert(t.msgProviderDeleted);
+      setSelectedProvider(null);
+      await fetchData(); // refresh list
+    } catch (e: any) {
+      alert(e.message || t.alertDeleteProviderFailed);
+    } finally {
+      setOperationLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (authenticated) {
       const interval = setInterval(fetchData, 15000);
@@ -1018,6 +1150,12 @@ export default function AdminPage() {
             onTestInputKey={handleTestInputKey}
             onSaveFallbacks={handleSaveFallbacks}
             onResetFallbacks={handleResetFallbacks}
+            customProviderModalOpen={customProviderModalOpen}
+            setCustomProviderModalOpen={setCustomProviderModalOpen}
+            editingCustomProvider={editingCustomProvider}
+            setEditingCustomProvider={setEditingCustomProvider}
+            onSaveCustomProvider={handleSaveCustomProvider}
+            onDeleteCustomProvider={handleDeleteCustomProvider}
           />
         )}
         {activeTab === 'tools' && (

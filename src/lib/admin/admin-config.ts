@@ -5,6 +5,7 @@
 // Falls back to source-code defaults when no KV override exists.
 
 import { withTimeout } from '@/lib/utils/timeout';
+import type { ProviderConfig } from '../providers/types';
 
 let _kv: any = null;
 let _kvChecked = false;
@@ -411,3 +412,66 @@ export async function clearCustomQuota(): Promise<void> {
   if (!kv) return;
   await kv.del(PREFIX.quota);
 }
+
+// ── Custom Providers Management ──────────────────────────────
+
+/**
+ * Get all custom providers from KV.
+ */
+export async function getCustomProviders(): Promise<Record<string, ProviderConfig>> {
+  try {
+    const kv = await getKV();
+    if (kv) {
+      const raw = await withTimeout(
+        kv.get('admin:custom_providers'),
+        1000,
+        null,
+        'getCustomProviders'
+      );
+      if (raw) {
+        if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
+          return raw as Record<string, ProviderConfig>;
+        }
+        if (typeof raw === 'string') {
+          return JSON.parse(raw);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[getCustomProviders] Error:', err);
+  }
+  return {};
+}
+
+/**
+ * Save/upsert a custom provider configuration to KV.
+ */
+export async function saveCustomProvider(provider: ProviderConfig): Promise<void> {
+  const kv = await getKV();
+  if (!kv) {
+    throw new Error('KV storage not configured — cannot save custom provider');
+  }
+  const custom = await getCustomProviders();
+  custom[provider.name] = {
+    ...provider,
+    isCustom: true,
+  };
+  await kv.set('admin:custom_providers', JSON.stringify(custom));
+}
+
+/**
+ * Delete a custom provider from KV, and clean up its keys and fallback configs.
+ */
+export async function deleteCustomProvider(name: string): Promise<void> {
+  const kv = await getKV();
+  if (!kv) {
+    throw new Error('KV storage not configured — cannot delete custom provider');
+  }
+  const custom = await getCustomProviders();
+  delete custom[name];
+  await kv.set('admin:custom_providers', JSON.stringify(custom));
+  // Clean up keys and fallbacks entries
+  await kv.del(`admin:keys:${name}`);
+  await kv.del(`admin:fallbacks:${name}`);
+}
+

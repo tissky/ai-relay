@@ -6,7 +6,7 @@
 import { NextRequest } from 'next/server';
 import { requireAdminAuth, getManagedKeys, addManagedKey, removeManagedKey, setManagedKeys } from '@/lib/admin';
 import { hashKey, updateMemoryKeyPool } from '@/lib/relay';
-import { PROVIDERS } from '@/lib/providers';
+import { getAllProviders } from '@/lib/providers';
 
 export const runtime = 'nodejs';
 
@@ -29,19 +29,19 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
   if (authErr) return authErr;
 
   const { provider } = await params;
-  const config = PROVIDERS[provider];
+  const allProviders = await getAllProviders();
+  const config = allProviders[provider];
   if (!config) {
     return Response.json(
-      { error: { message: `Unknown provider: ${provider}. Valid: ${Object.keys(PROVIDERS).join(', ')}`, code: 404 } },
+      { error: { message: `Unknown provider: ${provider}. Valid: ${Object.keys(allProviders).join(', ')}`, code: 404 } },
       { status: 404 }
     );
   }
 
   const managedKeys = await getManagedKeys(provider);
-  const envKeys = (process.env[config.envKeyField] || '')
-    .split(',')
-    .map((k) => k.trim())
-    .filter(Boolean);
+  const envKeys = config.envKeyField
+    ? (process.env[config.envKeyField] || '').split(',').map((k) => k.trim()).filter(Boolean)
+    : [];
 
   // If managed keys exist, those are authoritative; otherwise use env keys
   const source = managedKeys ? 'managed' : 'env';
@@ -72,7 +72,8 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   if (authErr) return authErr;
 
   const { provider } = await params;
-  const config = PROVIDERS[provider];
+  const allProviders = await getAllProviders();
+  const config = allProviders[provider];
   if (!config) {
     return Response.json(
       { error: { message: `Unknown provider: ${provider}`, code: 404 } },
@@ -98,10 +99,9 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   }
 
   const newKey = body.key.trim();
-  const envKeys = (process.env[config.envKeyField] || '')
-    .split(',')
-    .map((k) => k.trim())
-    .filter(Boolean);
+  const envKeys = config.envKeyField
+    ? (process.env[config.envKeyField] || '').split(',').map((k) => k.trim()).filter(Boolean)
+    : [];
 
   const result = await addManagedKey(provider, newKey, envKeys);
   updateMemoryKeyPool(provider, result);
@@ -129,7 +129,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Params 
   if (authErr) return authErr;
 
   const { provider } = await params;
-  const config = PROVIDERS[provider];
+  const allProviders = await getAllProviders();
+  const config = allProviders[provider];
   if (!config) {
     return Response.json(
       { error: { message: `Unknown provider: ${provider}`, code: 404 } },
@@ -155,10 +156,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Params 
   }
 
   try {
-    const envKeys = (process.env[config.envKeyField] || '')
-      .split(',')
-      .map((k) => k.trim())
-      .filter(Boolean);
+    const envKeys = config.envKeyField
+      ? (process.env[config.envKeyField] || '').split(',').map((k) => k.trim()).filter(Boolean)
+      : [];
 
     // If hash is provided, we need to find the actual key first
     if (body.hash && !body.key) {

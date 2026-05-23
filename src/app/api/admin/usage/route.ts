@@ -7,7 +7,7 @@ import { NextRequest } from 'next/server';
 import { requireAdminAuth } from '@/lib/admin';
 import { getKeyPoolStats, initAllKeyPools } from '@/lib/relay';
 import { KVUsageStorage } from '@/lib/usage';
-import { PROVIDERS } from '@/lib/providers';
+import { getAllProviders } from '@/lib/providers';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -23,8 +23,9 @@ export async function GET(request: NextRequest) {
   const authErr = requireAdminAuth(request);
   if (authErr) return authErr;
 
+  const allProviders = await getAllProviders();
   // Eagerly init all provider pools
-  await initAllKeyPools(PROVIDERS);
+  await initAllKeyPools(allProviders);
   const poolStats = getKeyPoolStats();
 
   // Fetch global usage and per-provider usage in parallel
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
   ]);
 
   // Build per-provider summary
-  const providers = Object.entries(PROVIDERS).map(([name, config]) => {
+  const providers = Object.entries(allProviders).map(([name, config]) => {
     const usage = globalUsage?.providers?.[name] || { requests: 0, tokens: 0, promptTokens: 0, completionTokens: 0 };
     const pool = poolStats[name] || { total: 0, available: 0, keyHashes: [] };
     const errors = errorStats[name] || {};

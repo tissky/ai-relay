@@ -6,7 +6,7 @@
 // ============================================================
 
 import { NextRequest } from 'next/server';
-import { PROVIDERS } from '@/lib/providers';
+import { getAllProviders } from '@/lib/providers';
 import { getKeyPoolStats, initAllKeyPools, getRelayApiKeys } from '@/lib/relay';
 import { resolveProvider } from '@/lib/providers';
 import type { ModelInfo } from '@/lib/providers/types';
@@ -19,11 +19,12 @@ const RELAY_CREATED = Math.floor(Date.now() / 1000);
  * Find a specific model by ID across all providers.
  */
 async function findModel(modelId: string): Promise<(ModelInfo & { owned_by: string; configured: boolean }) | null> {
-  await initAllKeyPools(PROVIDERS);
+  const allProviders = await getAllProviders();
+  await initAllKeyPools(allProviders);
   const poolStats = getKeyPoolStats();
 
-  for (const [providerId, config] of Object.entries(PROVIDERS)) {
-    const configured = !!process.env[config.envKeyField];
+  for (const [providerId, config] of Object.entries(allProviders)) {
+    const configured = config.envKeyField ? (!!process.env[config.envKeyField] || (poolStats[providerId]?.total > 0)) : (poolStats[providerId]?.total > 0);
     const hasKeys = (poolStats[providerId]?.available || 0) > 0;
 
     if (config.models) {

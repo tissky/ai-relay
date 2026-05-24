@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { AdminData } from '../types';
 
 interface ProviderConfigEditorProps {
@@ -31,7 +31,7 @@ interface ProviderConfigEditorProps {
   onAddKey: () => Promise<void>;
   onDeleteKey: (providerId: string, hash: string) => Promise<void>;
   onTestKey: (providerId: string, hash: string, modelId?: string) => Promise<void>;
-  onTestInputKey: () => Promise<void>;
+  onTestInputKey: (modelId?: string) => Promise<void>;
   onSaveFallbacks: (newChain: string[]) => Promise<void>;
   onResetFallbacks: () => Promise<void>;
   setEditingCustomProvider: (val: any) => void;
@@ -69,10 +69,18 @@ export default function ProviderConfigEditor({
   onDeleteCustomProvider,
 }: ProviderConfigEditorProps) {
   const [selectedModels, setSelectedModels] = useState<Record<string, string>>({});
+  const [selectedInputModel, setSelectedInputModel] = useState('');
+
+  const currentProviderObj = selectedProvider ? data.providers.find(p => p.id === selectedProvider) : undefined;
+  const providerModels = useMemo(() => currentProviderObj?.models || [], [currentProviderObj]);
+
+  useEffect(() => {
+    if (selectedInputModel && !providerModels.some((m) => m.id === selectedInputModel)) {
+      setSelectedInputModel('');
+    }
+  }, [providerModels, selectedInputModel]);
 
   if (!selectedProvider) return null;
-
-  const currentProviderObj = data.providers.find(p => p.id === selectedProvider);
 
   return (
     <section
@@ -93,7 +101,7 @@ export default function ProviderConfigEditor({
       }}>
         <div>
           <h2 style={{ fontSize: '1.3rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#fff', fontWeight: 600 }}>
-            ⚙️ {t.configureTitle.replace('{name}', currentProviderObj?.name || selectedProvider)}
+            {t.configureTitle.replace('{name}', currentProviderObj?.name || selectedProvider)}
           </h2>
           <span style={{ fontSize: '0.85rem', color: '#9ca3af' }}>
             {t.providerIdLabel} <code style={{ color: '#60a5fa', fontFamily: 'monospace' }}>{selectedProvider}</code>
@@ -243,7 +251,7 @@ export default function ProviderConfigEditor({
             </div>
 
             {/* Add Key Form */}
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
               <input
                 type="password"
                 placeholder={t.addKeyPlaceholder}
@@ -253,6 +261,7 @@ export default function ProviderConfigEditor({
                 style={{
                   flex: 1,
                   padding: '0.6rem 0.8rem',
+                  minWidth: '220px',
                   borderRadius: '6px',
                   border: '1px solid rgba(255, 255, 255, 0.08)',
                   backgroundColor: 'rgba(0, 0, 0, 0.25)',
@@ -264,8 +273,38 @@ export default function ProviderConfigEditor({
                 onFocus={(e) => e.target.style.borderColor = 'rgba(59, 130, 246, 0.5)'}
                 onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.08)'}
               />
+              <select
+                value={selectedInputModel}
+                onChange={(e) => setSelectedInputModel(e.target.value)}
+                disabled={operationLoading || testingInput}
+                title={t.testModelLabel}
+                aria-label={t.testModelLabel}
+                style={{
+                  width: '170px',
+                  padding: '0.6rem 2rem 0.6rem 0.8rem',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  backgroundColor: 'rgba(0, 0, 0, 0.25)',
+                  color: '#d1d5db',
+                  fontSize: '0.85rem',
+                  outline: 'none',
+                  cursor: operationLoading || testingInput ? 'not-allowed' : 'pointer',
+                  appearance: 'none',
+                  backgroundImage: `url("data:image/svg+xml;utf8,<svg fill='none' height='12' stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' viewBox='0 0 24 24' width='12' xmlns='http://www.w3.org/2000/svg'><polyline points='6 9 12 15 18 9'/></svg>")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 0.65rem center',
+                  backgroundSize: '0.75rem',
+                }}
+              >
+                <option value="">{t.modelSelectorAuto}</option>
+                {providerModels.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.displayName || m.id}
+                  </option>
+                ))}
+              </select>
               <button
-                onClick={onTestInputKey}
+                onClick={() => onTestInputKey(selectedInputModel)}
                 disabled={operationLoading || testingInput || !newKeyInput.trim()}
                 style={{
                   padding: '0.6rem 1rem',

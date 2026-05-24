@@ -215,7 +215,7 @@ export function useAdminHandlers(apiKey: string, t: any) {
     }
   }, [apiKey, t]);
 
-  const handleTestInputKey = useCallback(async () => {
+  const handleTestInputKey = useCallback(async (model?: string) => {
     if (!selectedProvider || !newKeyInput.trim()) return;
     setTestingInput(true);
     try {
@@ -225,7 +225,7 @@ export function useAdminHandlers(apiKey: string, t: any) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({ key: newKeyInput.trim() }),
+        body: JSON.stringify({ key: newKeyInput.trim(), model }),
       });
       const resData = await res.json();
       if (!res.ok) {

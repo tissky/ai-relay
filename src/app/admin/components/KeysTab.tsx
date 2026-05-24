@@ -34,7 +34,7 @@ interface KeysTabProps {
   onAddKey: () => Promise<void>;
   onDeleteKey: (providerId: string, hash: string) => Promise<void>;
   onTestKey: (providerId: string, hash: string, modelId?: string) => Promise<void>;
-  onTestInputKey: () => Promise<void>;
+  onTestInputKey: (modelId?: string) => Promise<void>;
   onSaveFallbacks: (newChain: string[]) => Promise<void>;
   onResetFallbacks: () => Promise<void>;
   customProviderModalOpen: boolean;

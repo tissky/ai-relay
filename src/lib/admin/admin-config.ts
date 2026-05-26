@@ -1006,3 +1006,348 @@ export function tryDecodeBase64(str: string): string {
   }
   return str;
 }
+
+/**
+ * Exports all configuration-related data from Vercel KV as a single JSON-serializable object.
+ */
+export async function exportBackupData(): Promise<Record<string, any>> {
+  const kv = await getKV();
+  if (!kv) {
+    throw new Error('KV storage not configured');
+  }
+
+  // 1. Get custom providers
+  const customProviders = await getCustomProviders(true);
+
+  // Get all possible provider names (static + custom)
+  const { PROVIDERS } = await import('../providers/registry');
+  const allProviderNames = Array.from(new Set([
+    ...Object.keys(PROVIDERS),
+    ...Object.keys(customProviders)
+  ]));
+
+  // 2. Fetch all keys and fallback overrides in parallel
+  const keysPayload: Record<string, string[]> = {};
+  const fallbacksPayload: Record<string, string[]> = {};
+
+  const keysPromises = allProviderNames.map(async (name) => {
+    try {
+      const keys = await getManagedKeys(name, true);
+      if (keys && keys.length > 0) {
+        keysPayload[name] = keys;
+      }
+    } catch {
+      // Ignore errors for individual provider lookups
+    }
+  });
+
+  const fallbacksPromises = allProviderNames.map(async (name) => {
+    try {
+      // Query the KV key directly to only back up custom overrides rather than static defaults
+      const raw = await kv.get(`${PREFIX.fallbacks}${name}`);
+      if (raw) {
+        const parsed = parseJsonOrArray(raw);
+        if (parsed && parsed.length > 0) {
+          fallbacksPayload[name] = parsed;
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  });
+
+  // 3. Fetch global configurations
+  const [quota, modelAliases, priorityRules, webhooks] = await Promise.all([
+    getCustomQuota(),
+    getModelAliasConfig(true),
+    getPriorityRules(true),
+    getWebhookSettings(),
+    ...keysPromises,
+    ...fallbacksPromises
+  ]);
+
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    customProviders,
+    keys: keysPayload,
+    fallbacks: fallbacksPayload,
+    quota,
+    modelAliases,
+    priorityRules,
+    webhooks
+  };
+}
+
+/**
+ * Restores configuration-related data into Vercel KV from a backup object.
+ */
+export async function importBackupData(data: Record<string, any>): Promise<void> {
+  const kv = await getKV();
+  if (!kv) {
+    throw new Error('KV storage not configured');
+  }
+
+  if (data.version !== 1) {
+    throw new Error('Invalid backup version or format');
+  }
+
+  // Load existing custom providers before overwriting them
+  const oldCustomProviders = await getCustomProviders(true);
+
+  // 1. Restore custom providers
+  if (data.customProviders && typeof data.customProviders === 'object') {
+    await kv.set('admin:custom_providers', JSON.stringify(data.customProviders));
+  } else {
+    await kv.del('admin:custom_providers');
+  }
+
+  // Clear cache for custom providers immediately so subsequent validation works
+  try {
+    const { clearProvidersCache } = await import('../providers/resolver');
+    clearProvidersCache();
+  } catch {
+    // ignore
+  }
+
+  // 2. Restore custom priority rules
+  if (data.priorityRules) {
+    await savePriorityRules(data.priorityRules);
+  } else {
+    await kv.del(PREFIX.priorityRules);
+  }
+
+  // 3. Restore model aliases
+  if (data.modelAliases) {
+    await saveModelAliasConfig(data.modelAliases);
+  } else {
+    await kv.del(PREFIX.modelAliases);
+  }
+
+  // 4. Restore webhooks
+  if (data.webhooks) {
+    await saveWebhookSettings(data.webhooks);
+  } else {
+    await kv.del(WEBHOOK_PREFIX);
+  }
+
+  // 5. Restore custom quota
+  if (data.quota) {
+    await setCustomQuota(data.quota);
+  } else {
+    await clearCustomQuota();
+  }
+
+  // 6. Clean up old keys and fallbacks in KV first
+  const { PROVIDERS } = await import('../providers/registry');
+  const newCustomProviders = data.customProviders && typeof data.customProviders === 'object' ? data.customProviders : {};
+  const allProviderNames = Array.from(new Set([
+    ...Object.keys(PROVIDERS),
+    ...Object.keys(oldCustomProviders),
+    ...Object.keys(newCustomProviders)
+  ]));
+
+  for (const name of allProviderNames) {
+    await kv.del(`${PREFIX.keys}${name}`);
+    await kv.del(`${PREFIX.fallbacks}${name}`);
+  }
+
+  // 7. Write restored keys (bumps versions and updates memory pools)
+  if (data.keys && typeof data.keys === 'object') {
+    for (const [provider, keys] of Object.entries(data.keys)) {
+      if (Array.isArray(keys) && keys.length > 0) {
+        await setManagedKeys(provider, keys);
+      }
+    }
+  }
+
+  // 8. Write restored fallbacks (uses setFallbackChain for circular validation)
+  if (data.fallbacks && typeof data.fallbacks === 'object') {
+    for (const [provider, fallbacks] of Object.entries(data.fallbacks)) {
+      if (Array.isArray(fallbacks) && fallbacks.length > 0) {
+        await setFallbackChain(provider, fallbacks);
+      }
+    }
+  }
+
+  // Clear all caches at the end
+  clearCache();
+}
+
+/**
+ * Exports stats-related data (usage counts, daily reports, error logs) from Vercel KV for a given date range.
+ */
+export async function exportStatsData(startDate: string, endDate: string): Promise<Record<string, any>> {
+  const kv = await getKV();
+  if (!kv) {
+    throw new Error('KV storage not configured');
+  }
+
+  // Parse dates
+  const { enumerateDateKeys } = await import('../usage/daily-report-store');
+  const dates = enumerateDateKeys(startDate, endDate);
+  if (dates.length === 0) {
+    throw new Error('Invalid date range');
+  }
+
+  const { getAllProviders } = await import('../providers/resolver');
+  const allProviders = await getAllProviders();
+  const providerNames = Object.keys(allProviders);
+
+  // Extract months represented in the date range
+  const months = Array.from(new Set(dates.map(d => d.slice(0, 7))));
+
+  // Fetch data for each date
+  const usageDaily: Record<string, any> = {};
+  const quotaDaily: Record<string, any> = {};
+  const errorKeys: Record<string, string[]> = {};
+  const dailyReports: Record<string, any> = {};
+  const usageProviderDaily: Record<string, Record<string, any>> = {};
+  const errorProviderDaily: Record<string, Record<string, any>> = {};
+
+  // Init provider sub-records
+  for (const provider of providerNames) {
+    usageProviderDaily[provider] = {};
+    errorProviderDaily[provider] = {};
+  }
+
+  // Perform parallel fetches
+  await Promise.all(dates.map(async (d) => {
+    // 1. Fetch usage daily
+    const uDaily = await kv.hgetall(`usage:daily:${d}`);
+    if (uDaily && Object.keys(uDaily).length > 0) usageDaily[d] = uDaily;
+
+    // 2. Fetch quota daily
+    const qDaily = await kv.get(`quota:daily:${d}`);
+    if (qDaily !== null && qDaily !== undefined) quotaDaily[d] = qDaily;
+
+    // 3. Fetch error keys index
+    const errKeys = await kv.smembers(`error:keys:${d}`);
+    if (errKeys && errKeys.length > 0) errorKeys[d] = errKeys;
+
+    // 4. Fetch daily report
+    const report = await kv.get(`relay:report:daily:${d}`);
+    if (report) {
+      dailyReports[d] = typeof report === 'string' ? JSON.parse(report) : report;
+    }
+
+    // 5. Fetch provider specific daily logs
+    await Promise.all(providerNames.map(async (provider) => {
+      const upDaily = await kv.hgetall(`usage:provider:${provider}:daily:${d}`);
+      if (upDaily && Object.keys(upDaily).length > 0) usageProviderDaily[provider][d] = upDaily;
+
+      const epDaily = await kv.hgetall(`error:${provider}:${d}`);
+      if (epDaily && Object.keys(epDaily).length > 0) errorProviderDaily[provider][d] = epDaily;
+    }));
+  }));
+
+  // Fetch quota monthly values
+  const quotaMonthly: Record<string, any> = {};
+  await Promise.all(months.map(async (m) => {
+    const qMonthly = await kv.get(`quota:monthly:${m}`);
+    if (qMonthly !== null && qMonthly !== undefined) quotaMonthly[m] = qMonthly;
+  }));
+
+  return {
+    type: 'ai-relay-stats-backup',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    startDate,
+    endDate,
+    data: {
+      usageDaily,
+      usageProviderDaily,
+      errorProviderDaily,
+      dailyReports,
+      quotaDaily,
+      quotaMonthly,
+      errorKeys
+    }
+  };
+}
+
+/**
+ * Restores stats-related data (usage counts, daily reports, error logs) into Vercel KV from a backup payload.
+ */
+export async function importStatsData(payload: Record<string, any>): Promise<void> {
+  const kv = await getKV();
+  if (!kv) {
+    throw new Error('KV storage not configured');
+  }
+
+  if (payload.type !== 'ai-relay-stats-backup' || payload.version !== 1 || !payload.data) {
+    throw new Error('Invalid statistics backup format or version');
+  }
+
+  const {
+    usageDaily = {},
+    usageProviderDaily = {},
+    errorProviderDaily = {},
+    dailyReports = {},
+    quotaDaily = {},
+    quotaMonthly = {},
+    errorKeys = {}
+  } = payload.data;
+
+  // Restore usage daily
+  for (const [date, val] of Object.entries(usageDaily)) {
+    if (val && typeof val === 'object' && Object.keys(val).length > 0) {
+      await kv.hset(`usage:daily:${date}`, val);
+      await kv.expire(`usage:daily:${date}`, 30 * 24 * 60 * 60); // 30 days standard TTL
+    }
+  }
+
+  // Restore quota daily
+  for (const [date, val] of Object.entries(quotaDaily)) {
+    await kv.set(`quota:daily:${date}`, String(val));
+    await kv.expire(`quota:daily:${date}`, 2 * 24 * 60 * 60); // 2 days standard TTL
+  }
+
+  // Restore quota monthly
+  for (const [month, val] of Object.entries(quotaMonthly)) {
+    await kv.set(`quota:monthly:${month}`, String(val));
+    await kv.expire(`quota:monthly:${month}`, 35 * 24 * 60 * 60); // 35 days standard TTL
+  }
+
+  // Restore daily reports
+  for (const [date, val] of Object.entries(dailyReports)) {
+    if (val && typeof val === 'object') {
+      await kv.set(`relay:report:daily:${date}`, JSON.stringify(val));
+      await kv.expire(`relay:report:daily:${date}`, 30 * 24 * 60 * 60); // 30 days standard TTL
+    }
+  }
+
+  // Restore error keys
+  for (const [date, members] of Object.entries(errorKeys)) {
+    if (Array.isArray(members) && members.length > 0) {
+      await kv.del(`error:keys:${date}`); // Clear first
+      await kv.sadd(`error:keys:${date}`, ...members);
+      await kv.expire(`error:keys:${date}`, 7 * 24 * 60 * 60); // 7 days standard TTL
+    }
+  }
+
+  // Restore provider daily usage
+  for (const [provider, datesData] of Object.entries(usageProviderDaily)) {
+    if (datesData && typeof datesData === 'object') {
+      for (const [date, val] of Object.entries(datesData as Record<string, any>)) {
+        if (val && typeof val === 'object' && Object.keys(val).length > 0) {
+          await kv.hset(`usage:provider:${provider}:daily:${date}`, val);
+          await kv.expire(`usage:provider:${provider}:daily:${date}`, 30 * 24 * 60 * 60);
+        }
+      }
+    }
+  }
+
+  // Restore provider error daily logs
+  for (const [provider, datesData] of Object.entries(errorProviderDaily)) {
+    if (datesData && typeof datesData === 'object') {
+      for (const [date, val] of Object.entries(datesData as Record<string, any>)) {
+        if (val && typeof val === 'object' && Object.keys(val).length > 0) {
+          await kv.hset(`error:${provider}:${date}`, val);
+          await kv.expire(`error:${provider}:${date}`, 7 * 24 * 60 * 60);
+        }
+      }
+    }
+  }
+}
+

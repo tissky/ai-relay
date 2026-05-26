@@ -486,6 +486,10 @@ function shouldRecheckQuota(dailyUsed: number, dailyLimit: number, monthlyUsed: 
 }
 
 export class KVUsageStorage implements UsageStorage {
+  /**
+   * Record a usage event with per-request KV write.
+   * Used for low-traffic paths or when batching is not desired.
+   */
   async record(event: UsageEvent): Promise<void> {
     try {
       const kv = await getKV();
@@ -550,6 +554,52 @@ export class KVUsageStorage implements UsageStorage {
     }
   }
 
+  /**
+   * Direct KV write for batched usage data (called by BatchUsageRecorder on flush).
+   * Skips per-event sampling — sampling is handled at the caller level.
+   * Writes global + per-provider aggregated counters.
+   */
+  async recordDirect(event: UsageEvent): Promise<void> {
+    try {
+      const kv = await getKV();
+      if (!kv) return;
+
+      const date = today();
+      const requestCount = event.promptTokens > 0 || event.completionTokens > 0 ? 1 : 0;
+      const totalTokens = event.totalTokens;
+      const promptTokens = event.promptTokens;
+      const completionTokens = event.completionTokens;
+
+      await withTimeout(
+        runUsageScript(
+          kv,
+          [
+            kvKeys.usageDaily(date),
+            event.provider ? kvKeys.usageProviderDaily(event.provider, date) : kvKeys.usageDaily(date),
+            kvKeys.legacyKeyDaily(event.apiKeyHash || 'batch', date),
+            kvKeys.legacyKeyTotal(event.apiKeyHash || 'batch'),
+          ],
+          [
+            String(requestCount || 1),
+            String(totalTokens),
+            String(promptTokens),
+            String(completionTokens),
+            event.provider ? '1' : '0',
+            '0', // no per-key writes for batch
+            '0',
+            '0',
+          ]
+        ),
+        1000,
+        undefined,
+        'recordDirect:eval'
+      );
+      clearUsageReadCaches();
+    } catch {
+      // Non-critical
+    }
+  }
+
   async recordError(event: {
     provider: string;
     keyHash: string;
@@ -578,6 +628,43 @@ export class KVUsageStorage implements UsageStorage {
         1000,
         undefined,
         'recordError:eval'
+      );
+      clearUsageReadCaches();
+    } catch {
+      // Non-critical
+    }
+  }
+
+  /**
+   * Direct KV write for batched error data (called by BatchUsageRecorder on flush).
+   * Skips per-event sampling.
+   */
+  async recordErrorDirect(event: {
+    provider: string;
+    keyHash: string;
+    statusCode: number;
+    reason: string;
+  }): Promise<void> {
+    try {
+      const kv = await getKV();
+      if (!kv) return;
+
+      const date = today();
+      const status = String(event.statusCode);
+
+      await withTimeout(
+        runErrorScript(
+          kv,
+          [
+            kvKeys.errorProviderDaily(event.provider, date),
+            kvKeys.legacyErrorKeyDaily(event.keyHash || 'batch', date),
+            kvKeys.errorKeyIndex(date),
+          ],
+          [status, event.reason.slice(0, 200), event.keyHash || 'batch', '0']
+        ),
+        1000,
+        undefined,
+        'recordErrorDirect:eval'
       );
       clearUsageReadCaches();
     } catch {

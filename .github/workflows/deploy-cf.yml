@@ -78,8 +78,7 @@ jobs:
               sed -i.bak "s|database_id = .*|database_id = \"${ESCAPED_ID}\"|" wrangler.toml
             else
               # Insert database_id after database_name line
-              sed -i.bak "/database_name = \"ai-relay\"/a\\
-database_id = \"${ESCAPED_ID}\"" wrangler.toml
+              sed -i.bak "/database_name = \"ai-relay\"/a database_id = \"${ESCAPED_ID}\"" wrangler.toml
             fi
           else
             echo "❌ Error: Failed to obtain D1 database_id"
@@ -106,8 +105,7 @@ database_id = \"${ESCAPED_ID}\"" wrangler.toml
               sed -i.bak "s|^id = .*|id = \"${ESCAPED_KV_ID}\"|" wrangler.toml
             else
               # Insert id after binding = "KV" line
-              sed -i.bak "/binding = \"KV\"/a\\
-id = \"${ESCAPED_KV_ID}\"" wrangler.toml
+              sed -i.bak "/binding = \"KV\"/a id = \"${ESCAPED_KV_ID}\"" wrangler.toml
             fi
           else
             echo "❌ Error: Failed to obtain KV namespace id"

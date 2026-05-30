@@ -5,15 +5,15 @@
 import { NextRequest } from 'next/server';
 import { getKeyPoolStats, initAllKeyPools } from '@/lib/relay';
 import { requireAdminAuth } from '@/lib/admin';
-import { KVUsageStorage } from '@/lib/usage';
+import { createUsageStorage } from '@/lib/usage/factory';
 import { getUsageSamplingInfo } from '@/lib/usage/storage/kv-storage';
 import { getAllProviders } from '@/lib/providers';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-const usageStorage = new KVUsageStorage();
+
 
 /**
  * GET /api/admin
@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
   const authResponse = requireAdminAuth(request);
   if (authResponse) return authResponse;
 
+  const usageStorage = createUsageStorage();
   const url = new URL(request.url);
   const forceRefresh = url.searchParams.get('refresh') === '1';
   const allProviders = await getAllProviders(forceRefresh);

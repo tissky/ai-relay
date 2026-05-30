@@ -7,7 +7,7 @@ import { NextRequest } from 'next/server';
 import { requireAdminAuth, saveCustomProvider, deleteCustomProvider } from '@/lib/admin';
 import { clearProvidersCache } from '@/lib/providers';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 /**
  * POST /api/admin/providers

@@ -6,7 +6,7 @@
 import { NextRequest } from 'next/server';
 import { requireAdminAuth, setCustomQuota, clearCustomQuota } from '@/lib/admin';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 /**
  * PUT /api/admin/quota

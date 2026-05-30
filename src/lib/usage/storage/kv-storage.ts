@@ -92,6 +92,10 @@ function parseDailyPoint(date: string, raw: Record<string, unknown> | null): Tre
 let _kv: any = null;
 
 async function getKV() {
+  // Cloudflare Pages: usage is handled by D1UsageStorage, not this file.
+  // Return null so KVUsageStorage gracefully no-ops on CF.
+  if (process.env.CF_PAGES) return null;
+
   if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
     if (_kv && !_kv._isMock) return _kv;
     try {

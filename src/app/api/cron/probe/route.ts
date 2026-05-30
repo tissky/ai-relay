@@ -11,12 +11,14 @@ import { getKeyPool } from '@/lib/relay/key-pool';
 import { buildHeaders } from '@/lib/relay/transform';
 import { recordHealthProbeResult } from '@/lib/health/storage';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 function cronOrAdminAuth(request: NextRequest): Response | null {
   if (request.headers.get('x-vercel-cron') === '1') return null;
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret && request.headers.get('x-cron-secret') === cronSecret) return null;
   return requireAdminAuth(request);
 }
 

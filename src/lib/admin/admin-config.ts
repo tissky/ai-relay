@@ -188,6 +188,20 @@ export function createMemoryMockKV() {
 
 async function getKV() {
   const g = global as any;
+
+  // Cloudflare Pages: use CF KV binding via CFKVAdapter
+  if (process.env.CF_PAGES) {
+    try {
+      const { getCFEnv } = await import('@/lib/cf-env');
+      const cfEnv = getCFEnv();
+      if (cfEnv?.KV) {
+        const { CFKVAdapter } = await import('./cf-kv-adapter');
+        return new CFKVAdapter(cfEnv.KV);
+      }
+    } catch { /* fall through */ }
+    return null;
+  }
+
   if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
     if (_kv && !_kv._isMock) return _kv;
     try {

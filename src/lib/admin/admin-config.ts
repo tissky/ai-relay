@@ -190,9 +190,9 @@ async function getKV() {
   const g = global as any;
 
   // Cloudflare Pages: use CF KV binding via CFKVAdapter
-  if (process.env.CF_PAGES) {
+  const { isCloudflare, getCFEnv } = await import('@/lib/cf-env');
+  if (isCloudflare()) {
     try {
-      const { getCFEnv } = await import('@/lib/cf-env');
       const cfEnv = getCFEnv();
       if (cfEnv?.KV) {
         const { CFKVAdapter } = await import('./cf-kv-adapter');
@@ -573,7 +573,7 @@ export async function getManagedKeys(providerName: string, forceRefresh = false)
     setCached(cacheKey, null);
     return null;
   }
-  throw new Error('KV storage not configured');
+  return null;
 }
 
 export async function getManagedKeysVersion(providerName: string): Promise<number> {
@@ -582,7 +582,7 @@ export async function getManagedKeysVersion(providerName: string): Promise<numbe
   if (cached !== null) return cached;
 
   const kv = await getKV();
-  if (!kv) throw new Error('KV storage not configured');
+  if (!kv) return 0;
   const raw = await withTimeout(
     kv.get(`${PREFIX.keyVersion}${providerName}`),
     1000,

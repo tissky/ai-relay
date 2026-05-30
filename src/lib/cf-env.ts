@@ -4,7 +4,7 @@
 // Provides access to Cloudflare KV and D1 bindings when running
 // on Cloudflare Pages. Returns null outside CF environment.
 //
-// Uses getRequestContext() from @opennextjs/cloudflare so that
+// Uses getCloudflareContext() from @opennextjs/cloudflare so that
 // bindings are always request-scoped — no module-level state, no
 // race conditions between concurrent requests.
 //
@@ -19,16 +19,17 @@ export interface CFEnv {
 }
 
 export function getCFEnv(): CFEnv | null {
-  if (!process.env.CF_PAGES) return null;
   try {
-    const { getRequestContext } = require('@opennextjs/cloudflare');
-    const ctx = getRequestContext();
-    return ctx.env as unknown as CFEnv;
-  } catch {
-    return null;
-  }
+    const { getCloudflareContext } = require('@opennextjs/cloudflare');
+    const context = getCloudflareContext();
+    if (context && context.env) {
+      return context.env as unknown as CFEnv;
+    }
+  } catch {}
+  return null;
 }
 
 export function isCloudflare(): boolean {
-  return !!process.env.CF_PAGES;
+  return getCFEnv() !== null;
 }
+

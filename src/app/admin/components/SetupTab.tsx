@@ -12,6 +12,7 @@ interface SetupData {
     models?: ProviderInfo['models'];
   }>;
   timestamp: string;
+  isCloudflare?: boolean;
 }
 
 interface Props {
@@ -98,21 +99,29 @@ export default function SetupTab({ t, setupData, loading, onRunChecks, onOpenKey
     .filter((envKey): envKey is string => Boolean(envKey))
     .slice(0, 4);
 
+  const isCf = setupData?.isCloudflare;
+
   const guides = {
     adminKey: {
-      title: t.setupAdminKeyFixTitle,
+      title: isCf ? (t.setupAdminKeyFixTitleCf || t.setupAdminKeyFixTitle) : t.setupAdminKeyFixTitle,
       envKeys: ['RELAY_ADMIN_KEY'],
-      steps: [t.setupAdminKeyStep1, t.setupAdminKeyStep2, t.setupAdminKeyStep3],
+      steps: isCf
+        ? [t.setupAdminKeyStep1Cf || t.setupAdminKeyStep1, t.setupAdminKeyStep2Cf || t.setupAdminKeyStep2, t.setupAdminKeyStep3Cf || t.setupAdminKeyStep3]
+        : [t.setupAdminKeyStep1, t.setupAdminKeyStep2, t.setupAdminKeyStep3],
     },
     relayKey: {
-      title: t.setupRelayKeyFixTitle,
+      title: isCf ? (t.setupRelayKeyFixTitleCf || t.setupRelayKeyFixTitle) : t.setupRelayKeyFixTitle,
       envKeys: ['RELAY_API_KEY'],
-      steps: [t.setupRelayKeyStep1, t.setupRelayKeyStep2, t.setupRelayKeyStep3],
+      steps: isCf
+        ? [t.setupRelayKeyStep1Cf || t.setupRelayKeyStep1, t.setupRelayKeyStep2Cf || t.setupRelayKeyStep2, t.setupRelayKeyStep3Cf || t.setupRelayKeyStep3]
+        : [t.setupRelayKeyStep1, t.setupRelayKeyStep2, t.setupRelayKeyStep3],
     },
     kv: {
-      title: t.setupKvFixTitle,
-      envKeys: ['KV_REST_API_URL', 'KV_REST_API_TOKEN'],
-      steps: [t.setupKvStep1, t.setupKvStep2, t.setupKvStep3],
+      title: isCf ? (t.setupKvFixTitleCf || t.setupKvFixTitle) : t.setupKvFixTitle,
+      envKeys: isCf ? ['KV'] : ['KV_REST_API_URL', 'KV_REST_API_TOKEN'],
+      steps: isCf
+        ? [t.setupKvStep1Cf || t.setupKvStep1, t.setupKvStep2Cf || t.setupKvStep2, t.setupKvStep3Cf || t.setupKvStep3]
+        : [t.setupKvStep1, t.setupKvStep2, t.setupKvStep3],
     },
     providerKeys: {
       title: t.setupProviderKeysFixTitle,
@@ -137,7 +146,13 @@ export default function SetupTab({ t, setupData, loading, onRunChecks, onOpenKey
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
           <CheckRow label="RELAY_ADMIN_KEY" ok={checks.adminKey} hint={t.setupAdminKeyHint} guide={guides.adminKey} t={t} />
           <CheckRow label="RELAY_API_KEY" ok={checks.relayKey} hint={t.setupRelayKeyHint} guide={guides.relayKey} t={t} />
-          <CheckRow label={t.setupKvLabel} ok={checks.kv} hint={checks.kv ? t.setupKvReady : t.setupKvFallback} guide={guides.kv} t={t} />
+          <CheckRow 
+            label={isCf ? (t.setupKvLabelCf || t.setupKvLabel) : t.setupKvLabel} 
+            ok={checks.kv} 
+            hint={checks.kv ? (isCf ? (t.setupKvReadyCf || t.setupKvReady) : t.setupKvReady) : (isCf ? (t.setupKvFallbackCf || t.setupKvFallback) : t.setupKvFallback)} 
+            guide={guides.kv} 
+            t={t} 
+          />
           <CheckRow label={t.setupProviderKeys} ok={checks.providerKeys} hint={t.setupProviderKeysHint} guide={guides.providerKeys} t={t} />
         </div>
       ) : (

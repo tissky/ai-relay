@@ -8,6 +8,31 @@
 
 （暂无）
 
+## [2.8.0] - 2026-05-31
+
+### Added
+- **Cloudflare Pages 全自动部署**：支持通过 GitHub Actions 一键部署到 Cloudflare Pages，自动完成 D1 数据库创建、KV namespace 创建、D1 migrations 执行、环境变量配置和资源绑定，无需手动操作。
+- **Cloudflare D1 + KV 存储**：CF 部署使用 Cloudflare D1（用量统计）+ KV（配置数据），自动检测 CF 环境并切换存储后端。
+- **Cloudflare Cron 定时任务**：通过 CF Pages Cron Triggers + `worker.ts` 的 `scheduled()` handler 执行健康探测和用量聚合，支持 `DEPLOY_URL` 变量配置。
+- **`_routes.json` CDN 静态资源路由**：CF 部署自动生成 `_routes.json`，静态资源直接从 CDN 边缘节点分发，减少 Worker 调用。
+- **Scheduled GitHub Actions Workflow**：新增定时 GitHub Actions 工作流，定期执行 Provider 健康探测和用量聚合请求。
+- **Favicon 迁移与 Metadata 配置**：favicon 迁移至 `public/` 目录，更新 metadata 配置以适配 CF Pages 部署。
+- **CF 环境感知 Setup UI**：Admin 后台自动检测 Cloudflare 环境，展示平台专属配置界面。
+
+### Changed
+- **升级至 Next.js 15 + React 19**：全面升级框架版本，使用 `@opennextjs/cloudflare` 替代已废弃的 `@cloudflare/next-on-pages` 构建方案。(#18)
+- **CF Secret 部署重构**：Cloudflare Pages secret 部署改为动态同步模式，自动从 GitHub Secrets 或 Project Vars 同步所有环境变量。
+- **KV 操作并行化**：Admin 配置中 Key 和 Fallback 恢复的 KV 操作改为并行执行，提升加载性能。
+- **用量存储初始化异步化**：使用存储初始化和 CF 环境检测改为异步模式，适配可靠异步上下文。
+- **KV 不可用容错优化**：KV 未配置时改为抛出错误而非返回空备份数据，提升错误可诊断性。
+
+### Fixed
+- **无限 Keys 拉取 Bug**：修复 Key 池获取时可能出现的无限循环问题。
+- **CF 环境日报为空**：修复 Cloudflare 部署环境下每日用量报告数据为空的问题。
+- **KV 服务不可用韧性**：改善 KV 服务不可用时的容错能力，增加 CF 专属 UI 回退展示。
+- **Key Recorder 失败问题**：修复 Key 记录器在特定场景下的失败问题。
+- **CF 部署工作流稳定性**：修复 wrangler KV namespace 查找、D1/KV 资源配置、sed 命令转义等多个 CI 工作流问题。(#16, #17)
+
 ## [2.7.0] - 2026-05-29
 
 ### Added

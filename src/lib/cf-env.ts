@@ -18,8 +18,17 @@ export interface CFEnv {
   DB: import('@cloudflare/workers-types').D1Database;
 }
 
+function shouldSkipCloudflareContext(): boolean {
+  return (
+    process.env.NEXT_PHASE === 'phase-production-build' ||
+    process.env.VERCEL === '1' ||
+    !!process.env.VERCEL_ENV ||
+    !!process.env.VERCEL_URL
+  );
+}
+
 export function getCFEnvSync(): CFEnv | null {
-  if (process.env.NEXT_PHASE === 'phase-production-build') {
+  if (shouldSkipCloudflareContext()) {
     return null;
   }
 
@@ -37,7 +46,7 @@ export async function getCFEnv(): Promise<CFEnv | null> {
   const syncEnv = getCFEnvSync();
   if (syncEnv) return syncEnv;
 
-  if (process.env.NEXT_PHASE === 'phase-production-build') {
+  if (shouldSkipCloudflareContext()) {
     return null;
   }
 

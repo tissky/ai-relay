@@ -41,6 +41,9 @@
  *                              (e.g. python-requests). Defaults to a neutral SDK
  *                              UA matching the upstream format; never reveals the relay.
  *
+ * [Admin UI] (optional)
+ *   RELAY_API_KEY_MIN_LENGTH — Minimum length for API keys added via the admin UI (default: 20)
+ *
  * [Postgres] (optional — for S1+ when Drizzle is active)
  *   DATABASE_URL         — Postgres connection string (e.g. postgres://user:pass@host:5432/db)
  *
@@ -135,4 +138,11 @@ export function hasDatabase(): boolean {
 
 export function hasKv(): boolean {
   return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+}
+
+// ── Admin UI Config ──────────────────────────────────────────
+
+/** Minimum character length for API keys added via the admin UI. Default: 20. */
+export function getApiKeyMinLength(): number {
+  return getEnvInt('RELAY_API_KEY_MIN_LENGTH', 20);
 }

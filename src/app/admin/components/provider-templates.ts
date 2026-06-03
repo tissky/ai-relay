@@ -209,12 +209,12 @@ export function buildDraftProvider(input: {
 
 export const buildDraftProviderFromForm = buildDraftProvider;
 
-export function validateApiKeyInput(apiKey: string): string | null {
+export function validateApiKeyInput(apiKey: string, minLength = 20): string | null {
   const trimmed = apiKey.trim();
   if (!trimmed) {
     return 'missing-api-key';
   }
-  if (trimmed.length < 20) {
+  if (minLength > 0 && trimmed.length < minLength) {
     return 'api-key-too-short';
   }
   if (/\s/.test(trimmed)) {

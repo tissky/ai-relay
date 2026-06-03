@@ -142,7 +142,7 @@ export default function CustomProviderModal({
     models: formModels,
   });
   const providerValidation = validateDraftProvider(draftProvider);
-  const apiKeyValidation = validateApiKeyInput(apiKeyValue);
+  const apiKeyValidation = validateApiKeyInput(apiKeyValue, data?.config?.apiKeyMinLength ?? 20);
   const currentStep = editingCustomProvider ? 1 : apiKeyValue.trim() ? 2 : 0;
   const helperText = {
     chooseTemplate: lang === 'zh' ? '选择模板' : 'Choose template',

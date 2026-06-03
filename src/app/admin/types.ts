@@ -55,6 +55,7 @@ export interface AdminData {
     monthlyLimit: number | null;
     customDailyLimit?: number | null;
     customMonthlyLimit?: number | null;
+    apiKeyMinLength: number;
   };
 }
 

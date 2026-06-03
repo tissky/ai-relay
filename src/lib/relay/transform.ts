@@ -41,9 +41,9 @@ export function transformToAnthropic(body: ChatCompletionRequest): Record<string
  * passed through a relay. Override any of them with RELAY_DEFAULT_USER_AGENT.
  */
 const DEFAULT_USER_AGENTS: Record<'openai' | 'anthropic' | 'azure', string> = {
-  openai: 'OpenAI/Python 1.59.0',
-  azure: 'OpenAI/Python 1.59.0',
-  anthropic: 'Anthropic/Python 0.39.0',
+  openai: 'openai-python/2.40.0',
+  azure: 'openai-python/2.40.0',
+  anthropic: 'anthropic-sdk-python/0.105.2',
 };
 
 /**
@@ -101,7 +101,8 @@ export function buildHeaders(
   headerFormat: 'openai' | 'anthropic' | 'azure',
   apiKey: string,
   isStream: boolean,
-  userAgent?: string
+  userAgent?: string,
+  customUserAgent?: string
 ): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -120,7 +121,8 @@ export function buildHeaders(
     headers['Accept'] = 'text/event-stream';
   }
 
-  headers['User-Agent'] = resolveUpstreamUserAgent(userAgent, headerFormat);
+  // Priority: custom provider UA > client UA > default SDK UA
+  headers['User-Agent'] = customUserAgent || resolveUpstreamUserAgent(userAgent, headerFormat);
 
   return headers;
 }

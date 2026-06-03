@@ -297,7 +297,7 @@ async function tryProviderWithRetries(
     try {
       const upstreamResponse = await fetch(url, {
         method: 'POST',
-        headers: buildHeaders(provider.headerFormat, currentKey.key, !!body.stream, userAgent),
+        headers: buildHeaders(provider.headerFormat, currentKey.key, !!body.stream, userAgent, provider.userAgent),
         body: JSON.stringify(requestBody),
       });
 

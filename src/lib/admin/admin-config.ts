@@ -1126,6 +1126,7 @@ function validateCustomProviders(customProviders: any): Record<string, ProviderC
       headerFormat: val.headerFormat as 'openai' | 'anthropic' | 'azure',
       envKeyField: typeof val.envKeyField === 'string' ? val.envKeyField.trim() : `${val.name.toUpperCase()}_KEYS`,
       envBaseUrlField: typeof val.envBaseUrlField === 'string' ? val.envBaseUrlField.trim() : undefined,
+      userAgent: typeof val.userAgent === 'string' ? val.userAgent.trim() : undefined,
       models: Array.isArray(val.models) 
         ? val.models.filter((m: any) => m && typeof m === 'object' && typeof m.id === 'string' && typeof m.displayName === 'string') 
         : [],

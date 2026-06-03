@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
   try {
     const response = await fetch(getModelsUrl(provider), {
       method: 'GET',
-      headers: buildHeaders(provider.headerFormat, apiKey, false),
+      headers: buildHeaders(provider.headerFormat, apiKey, false, undefined, provider.userAgent),
       signal: controller.signal,
     });
     clearTimeout(timeoutId);

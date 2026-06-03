@@ -107,7 +107,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   try {
     const upstreamResponse = await fetch(url, {
       method: 'POST',
-      headers: buildHeaders(provider.headerFormat, testKey, false),
+      headers: buildHeaders(provider.headerFormat, testKey, false, undefined, provider.userAgent),
       body: JSON.stringify(requestBody),
       signal: controller.signal,
     });

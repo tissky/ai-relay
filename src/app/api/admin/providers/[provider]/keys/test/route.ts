@@ -85,9 +85,12 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   // Construct upstream request parameters
   const url = getUpstreamUrl(provider);
   const isAnthropic = provider.headerFormat === 'anthropic';
+
+  // Use appropriate default model based on provider format
+  const defaultModel = isAnthropic ? 'claude-haiku-4-5-20251001' : 'gpt-5.4-mini';
   const targetModel = (body.model && typeof body.model === 'string' && body.model.trim().length > 0)
     ? body.model.trim()
-    : await resolveFallbackModel('gpt-5.4-mini', providerName);
+    : await resolveFallbackModel(defaultModel, providerName);
   const upstreamModel = resolveUpstreamModel(targetModel, provider);
 
   const testBody: ChatCompletionRequest = {

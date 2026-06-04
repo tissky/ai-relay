@@ -189,7 +189,11 @@ export async function POST(request: NextRequest) {
             signal: controller.signal,
           });
           const fallbackContentType = fallbackRes.headers.get('content-type') || '';
-          if (fallbackRes.ok && !fallbackContentType.includes('text/html')) {
+          const fallbackIsHtml = fallbackContentType.includes('text/html');
+          if (fallbackRes.ok && !fallbackIsHtml) {
+            res = fallbackRes;
+            finalBaseUrl = fallbackBase;
+          } else if (isHtml && !fallbackIsHtml) {
             res = fallbackRes;
             finalBaseUrl = fallbackBase;
           }

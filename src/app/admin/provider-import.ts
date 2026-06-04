@@ -29,6 +29,8 @@ export const DEFAULT_NEWAPI_MODEL_PREFIXES = [
   'text-embedding-',
 ];
 
+export const DEFAULT_NEWAPI_IMPORT_USER_AGENT = 'Mozilla/5.0';
+
 function decodeBase64Json(data: string): any {
   const normalized = data.replace(/-/g, '+').replace(/_/g, '/');
   const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
@@ -66,6 +68,20 @@ export function deriveProviderIdFromBaseUrl(baseUrl: string): string {
   } catch {
     return 'newapi';
   }
+}
+
+export function normalizeImportedBaseUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim().replace(/\/+$/, '');
+  try {
+    const url = new URL(trimmed);
+    if (!url.pathname || url.pathname === '/') {
+      url.pathname = '/v1';
+      return url.toString().replace(/\/+$/, '');
+    }
+  } catch {
+    return trimmed;
+  }
+  return trimmed;
 }
 
 export function buildEnvKeyField(providerId: string): string {
@@ -157,17 +173,19 @@ export function buildImportedProviderConfig(input: {
   providers: ProviderIdentity[];
   models?: DraftProviderPayload['models'];
 }): DraftProviderPayload {
-  const derivedId = deriveProviderIdFromBaseUrl(input.payload.baseUrl);
+  const baseUrl = normalizeImportedBaseUrl(input.payload.baseUrl);
+  const derivedId = deriveProviderIdFromBaseUrl(baseUrl);
   const name = resolveImportedProviderId(derivedId, input.providers);
   const modelPrefixes = deriveModelPrefixesFromModels(input.models || []);
 
   return {
     name,
     displayName: formatProviderDisplayName(derivedId),
-    baseUrl: input.payload.baseUrl,
+    baseUrl,
     headerFormat: 'openai',
     modelPrefixes: modelPrefixes.length > 0 ? modelPrefixes : DEFAULT_NEWAPI_MODEL_PREFIXES,
     envKeyField: buildEnvKeyField(name),
+    userAgent: DEFAULT_NEWAPI_IMPORT_USER_AGENT,
     models: input.models || [],
   };
 }

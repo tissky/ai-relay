@@ -112,6 +112,39 @@ describe('admin provider upstream model discovery', () => {
     expect(json.error.message.length).toBeLessThan(120);
   });
 
+  it('returns the fallback /v1 JSON error instead of the first HTML page error', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('<!doctype html><title>403 | Forbidden</title>', {
+        status: 403,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { message: '无效的令牌' },
+      }), { status: 404, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { POST } = await import('../app/api/admin/providers/models/route');
+    const res = await POST(req({
+      providerConfig: {
+        name: 'newapi_root',
+        displayName: 'NewAPI Root',
+        baseUrl: 'https://example.com',
+        headerFormat: 'openai',
+        modelPrefixes: ['gpt-'],
+        envKeyField: 'NEWAPI_ROOT_KEYS',
+      },
+      key: 'sk-test-key',
+    }));
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, 'https://example.com/models', expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://example.com/v1/models', expect.anything());
+    expect(res.status).toBe(502);
+    const json = await res.json();
+    expect(json.error.message).toContain('无效的令牌');
+    expect(json.error.message).not.toContain('<!doctype html>');
+  });
+
   it('resolves key from hash: prefix in body.key', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       object: 'list',

@@ -3,6 +3,7 @@ import {
   buildImportedProviderConfig,
   deriveModelPrefixesFromModels,
   normalizeProviderId,
+  normalizeImportedBaseUrl,
   deriveProviderIdFromBaseUrl,
   parseProviderImportLink,
   resolveImportedProviderId,
@@ -41,6 +42,12 @@ describe('NewAPI provider import links', () => {
     expect(deriveProviderIdFromBaseUrl('invalid-url')).toBe('newapi');
   });
 
+  it('normalizes bare NewAPI instance URLs to OpenAI-compatible /v1 base URLs', () => {
+    expect(normalizeImportedBaseUrl('https://elysiver.h-e.top')).toBe('https://elysiver.h-e.top/v1');
+    expect(normalizeImportedBaseUrl('https://relay.example.com/v1/')).toBe('https://relay.example.com/v1');
+    expect(normalizeImportedBaseUrl('https://dashscope.aliyuncs.com/compatible-mode/v1')).toBe('https://dashscope.aliyuncs.com/compatible-mode/v1');
+  });
+
   it('does not overwrite built-in providers with imported links', () => {
     expect(resolveImportedProviderId('openai', [{ id: 'openai', isCustom: false }])).toBe('openai_import');
     expect(resolveImportedProviderId('openai', [
@@ -76,6 +83,7 @@ describe('NewAPI provider import links', () => {
       baseUrl: 'https://relay.example.com/v1',
       headerFormat: 'openai',
       envKeyField: 'EXAMPLE_COM_KEYS',
+      userAgent: 'Mozilla/5.0',
       modelPrefixes: ['gpt-4o-mini'],
     });
   });
@@ -87,6 +95,16 @@ describe('NewAPI provider import links', () => {
       id: 'new-api',
       baseUrl: 'https://elysiver.h-e.top',
       apiKey: 'sk-mock-elysiver-key-xxxxxxxxx',
+    });
+  });
+
+  it('builds the user provided specific Cherry Studio URL with a /v1 API base', () => {
+    const link = 'cherrystudio://providers/api-keys?v=1&data=eyJpZCI6Im5ldy1hcGkiLCJiYXNlVXJsIjoiaHR0cHM6Ly9lbHlzaXZlci5oLWUudG9wIiwiYXBpS2V5Ijoic2stbW9jay1lbHlzaXZlci1rZXkteHh4eHh4eHh4In0%3D';
+    const payload = parseProviderImportLink(link);
+    expect(buildImportedProviderConfig({ payload, providers: [] })).toMatchObject({
+      baseUrl: 'https://elysiver.h-e.top/v1',
+      name: 'elysiver_h_e_top',
+      userAgent: 'Mozilla/5.0',
     });
   });
 });

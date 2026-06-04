@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { detectFallbackCycle, setFallbackChain, clearFallbackChain } from '../lib/admin/admin-config';
+import {
+  deleteCustomProvider,
+  detectFallbackCycle,
+  getFallbackChain,
+  saveCustomProvider,
+  setFallbackChain,
+  clearFallbackChain,
+} from '../lib/admin/admin-config';
 import * as resolver from '../lib/providers';
 import { relayRequest } from '../lib/relay/relay';
 import { PROVIDERS } from '../lib/providers/registry';
@@ -95,6 +102,28 @@ describe('Fallback Circular Dependency Tests', () => {
       await expect(setFallbackChain('openai', ['anthropic'])).rejects.toThrow(
         'Circular fallback detected: openai -> anthropic -> openai'
       );
+    });
+  });
+
+  describe('deleteCustomProvider cleanup', () => {
+    it('removes references to the deleted provider from other fallback chains', async () => {
+      await saveCustomProvider({
+        name: 'delete_me',
+        displayName: 'Delete Me',
+        baseUrl: 'https://delete-me.example.com/v1',
+        headerFormat: 'openai',
+        envKeyField: 'DELETE_ME_KEYS',
+        modelPrefixes: ['delete-me-'],
+        models: [],
+        isCustom: true,
+      });
+      await setFallbackChain('openai', ['delete_me:gpt-test', 'anthropic']);
+      await setFallbackChain('anthropic', ['delete_me']);
+
+      await deleteCustomProvider('delete_me');
+
+      await expect(getFallbackChain('openai')).resolves.toEqual(['anthropic']);
+      await expect(getFallbackChain('anthropic', ['openai'])).resolves.toEqual(['openai']);
     });
   });
 

@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
       envKeyField: config.envKeyField,
       baseUrl: config.baseUrl,
       headerFormat: config.headerFormat,
+      userAgent: config.userAgent,
     };
   });
 

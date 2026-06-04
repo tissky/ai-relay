@@ -986,11 +986,38 @@ export async function deleteCustomProvider(name: string): Promise<void> {
   if (!custom[name]) {
     throw new Error(`Custom provider not found: ${name}`);
   }
+  const { PROVIDERS } = await import('../providers/registry');
+  const allProviderNames = Array.from(new Set([
+    ...Object.keys(PROVIDERS),
+    ...Object.keys(custom),
+  ]));
   delete custom[name];
   await kv.set('admin:custom_providers', JSON.stringify(custom));
-  // Clean up keys and fallbacks entries
+
+  // Clean up keys, its own fallback chain, and references from other fallback chains.
   await kv.del(`admin:keys:${name}`);
   await kv.del(`admin:fallbacks:${name}`);
+  await Promise.all(allProviderNames
+    .filter((providerName) => providerName !== name)
+    .map(async (providerName) => {
+      const raw = await kv.get(`${PREFIX.fallbacks}${providerName}`);
+      const chain = parseJsonOrArray(raw);
+      if (!chain) return;
+
+      const filtered = chain.filter((entry) => {
+        const colonIdx = entry.indexOf(':');
+        const providerNamePart = colonIdx >= 0 ? entry.slice(0, colonIdx) : entry;
+        return providerNamePart !== name;
+      });
+
+      if (filtered.length === chain.length) return;
+      if (filtered.length > 0) {
+        await kv.set(`${PREFIX.fallbacks}${providerName}`, JSON.stringify(filtered));
+      } else {
+        await kv.del(`${PREFIX.fallbacks}${providerName}`);
+      }
+      clearCache(`fallback:${providerName}`);
+    }));
   await bumpManagedKeysVersion(name, kv);
   clearCache('customProviders');
   clearCache(`keys:${name}`);

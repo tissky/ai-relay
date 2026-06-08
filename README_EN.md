@@ -435,6 +435,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+Maintainer release flow is documented in [Release Flow](docs/RELEASE-FLOW.md): regular changes land in `pre-release` first, then ship to `main` after validation. Fork users can still deploy from the default `main` branch.
+
 ## 🙏 Acknowledgments
 
 - [OpenRouter](https://openrouter.ai) — Pioneered multi-provider API aggregation

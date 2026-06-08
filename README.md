@@ -472,6 +472,8 @@ Client → CF Pages Worker (全球分发, <50ms 延迟)
 4. 推送到分支 (`git push origin feature/amazing-feature`)
 5. 提交 Pull Request
 
+维护者发布流程见 [Release Flow](docs/RELEASE-FLOW.md)：常规变更先合入 `pre-release`，验证后再发布到 `main`。Fork 用户仍可按默认 `main` 分支部署。
+
 ## 🙏 致谢
 
 - [OpenRouter](https://openrouter.ai) — 多 Provider API 聚合模式先驱

@@ -8,6 +8,16 @@
 
 （暂无）
 
+## [2.12.0] - 2026-06-08
+
+### Added
+- **CcSwitch 深度链接导出**：支持将 Provider 配置导出为 CcSwitch 兼容的深度链接格式，方便在 Cherry Studio 等客户端中一键导入。
+- **NewAPI 频道连接 JSON 导入**：支持导入 NewAPI 的频道连接 JSON 格式，拓宽数据源兼容性。
+- **上游请求超时配置**：新增 `RELAY_UPSTREAM_TIMEOUT_MS` 环境变量，支持自定义上游 Provider 请求超时时间，避免长时间挂起。
+
+### Changed
+- **发版流程规范化**：新增 pre-release CI 工作流与发版流程文档（`docs/RELEASE-FLOW.md`）。
+
 ## [2.11.1] - 2026-06-07
 
 ### Added

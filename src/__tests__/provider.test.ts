@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { resolveProvider, resolveFallbackModel, resolveUpstreamModel, clearProvidersCache } from '../lib/providers/resolver';
+import { resolveProvider, resolveFallbackModel, resolveUpstreamModel, clearProvidersCache, normalizeUpstreamBase, getUpstreamUrl, getUpstreamCountTokensUrl, getUpstreamResponsesUrl } from '../lib/providers/resolver';
+import type { ProviderConfig } from '../lib/providers/types';
 import {
   saveCustomProvider,
   __adminConfigCacheForTests,
@@ -271,5 +272,65 @@ describe('validateRequestSize (Cloudflare O(1) request-size cap)', () => {
     process.env.RELAY_MAX_REQUEST_BYTES = 'not-a-number';
     expect(validateRequestSize(10 * 1024 * 1024).valid).toBe(true);
     expect(validateRequestSize(10 * 1024 * 1024 + 1).valid).toBe(false);
+  });
+});
+
+describe('upstream URL construction', () => {
+  it('defaults a bare origin to /v1', () => {
+    expect(normalizeUpstreamBase('https://sub.100xlabs.space')).toBe('https://sub.100xlabs.space/v1');
+    expect(normalizeUpstreamBase('https://sub.100xlabs.space/')).toBe('https://sub.100xlabs.space/v1');
+  });
+
+  it('leaves an existing version path untouched', () => {
+    expect(normalizeUpstreamBase('https://api.openai.com/v1')).toBe('https://api.openai.com/v1');
+    expect(normalizeUpstreamBase('https://api.anthropic.com/v1')).toBe('https://api.anthropic.com/v1');
+    expect(normalizeUpstreamBase('https://dashscope.aliyuncs.com/compatible-mode/v1')).toBe('https://dashscope.aliyuncs.com/compatible-mode/v1');
+    expect(normalizeUpstreamBase('https://generativelanguage.googleapis.com/v1beta')).toBe('https://generativelanguage.googleapis.com/v1beta');
+  });
+
+  it('strips trailing slashes from a versioned path', () => {
+    expect(normalizeUpstreamBase('https://relay.example.com/v1/')).toBe('https://relay.example.com/v1');
+  });
+
+  const anthropicBare: ProviderConfig = {
+    name: 'cc',
+    displayName: 'Custom Claude',
+    baseUrl: 'https://sub.100xlabs.space',
+    modelPrefixes: ['claude-'],
+    headerFormat: 'anthropic',
+    envKeyField: 'CC_KEYS',
+  };
+
+  const openaiBare: ProviderConfig = {
+    name: 'oa',
+    displayName: 'Custom OpenAI',
+    baseUrl: 'https://muyuan.do',
+    modelPrefixes: ['gpt-'],
+    headerFormat: 'openai',
+    envKeyField: 'OA_KEYS',
+  };
+
+  it('builds an anthropic /messages URL under /v1 from a bare origin', () => {
+    expect(getUpstreamUrl(anthropicBare)).toBe('https://sub.100xlabs.space/v1/messages');
+    expect(getUpstreamCountTokensUrl(anthropicBare)).toBe('https://sub.100xlabs.space/v1/messages/count_tokens');
+  });
+
+  it('leaves an openai bare origin untouched (root vs /v1 is ambiguous; probed by key-test)', () => {
+    // Unlike Anthropic, OpenAI-compatible gateways (NewAPI et al.) may serve the
+    // API at the root or under /v1. We do not guess here — the base is used
+    // as-is, and the admin key-test route probes both candidates.
+    expect(getUpstreamUrl(openaiBare)).toBe('https://muyuan.do/chat/completions');
+    expect(getUpstreamResponsesUrl(openaiBare)).toBe('https://muyuan.do/responses');
+  });
+
+  it('builds openai URLs from a versioned base as-is', () => {
+    const openaiVersioned: ProviderConfig = { ...openaiBare, baseUrl: 'https://muyuan.do/v1' };
+    expect(getUpstreamUrl(openaiVersioned)).toBe('https://muyuan.do/v1/chat/completions');
+    expect(getUpstreamResponsesUrl(openaiVersioned)).toBe('https://muyuan.do/v1/responses');
+  });
+
+  it('does not double a version prefix when the base already has one', () => {
+    const anthropicVersioned: ProviderConfig = { ...anthropicBare, baseUrl: 'https://api.anthropic.com/v1' };
+    expect(getUpstreamUrl(anthropicVersioned)).toBe('https://api.anthropic.com/v1/messages');
   });
 });

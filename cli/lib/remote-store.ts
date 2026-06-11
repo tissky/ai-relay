@@ -85,9 +85,14 @@ export class RemoteConfigStore implements ConfigStore {
     return snapshot?.priorityRules || [];
   }
 
-  async getFallbackChain(provider: string): Promise<string[]> {
+  async getFallbackChain(provider: string, staticFallbacks?: string[] | string): Promise<string[]> {
     const snapshot = this.getLatestSnapshot();
-    return snapshot?.fallbackChains[provider] || [];
+    const cloudChain = snapshot?.fallbackChains[provider] || [];
+    if (cloudChain.length > 0) return cloudChain;
+
+    // Fallback to static config
+    if (!staticFallbacks) return [];
+    return Array.isArray(staticFallbacks) ? staticFallbacks : [staticFallbacks];
   }
 
   async getConfigVersion(): Promise<number> {

@@ -30,8 +30,8 @@ export class VercelKVConfigStore implements ConfigStore {
     return await getAdminPriorityRules();
   }
 
-  async getFallbackChain(provider: string): Promise<string[]> {
-    return await getAdminFallbackChain(provider);
+  async getFallbackChain(provider: string, staticFallbacks?: string[] | string): Promise<string[]> {
+    return await getAdminFallbackChain(provider, staticFallbacks);
   }
 
   async getConfigVersion(): Promise<number> {

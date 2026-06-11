@@ -259,10 +259,9 @@ export async function relayRequest(
   // Fetch fallback chain early to determine if we can fall back on rate limit/circuit breaker open
   const { getDefaultConfigStore } = await import('../config-store');
   const store = getDefaultConfigStore();
-  const fallbackNames = await store.getFallbackChain(effectiveProvider.name);
-  const effectiveFallbackNames = fallbackNames.length > 0
-    ? fallbackNames
-    : (effectiveProvider.fallbackProviders || (effectiveProvider.fallbackProvider ? [effectiveProvider.fallbackProvider] : []));
+  const staticFallbacks = effectiveProvider.fallbackProviders || (effectiveProvider.fallbackProvider ? [effectiveProvider.fallbackProvider] : []);
+  const fallbackNames = await store.getFallbackChain(effectiveProvider.name, staticFallbacks);
+  const effectiveFallbackNames = fallbackNames;
 
   // Pre-flight: check rate limiter (token bucket + circuit breaker)
   const rateLimitCheck = checkRateLimit(effectiveProvider.name);

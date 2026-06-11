@@ -1,8 +1,8 @@
+#!/usr/bin/env node
+
 // ============================================================
 // AI Relay CLI — Entry Point
 // ============================================================
-
-#!/usr/bin/env node
 
 import { Command } from 'commander';
 

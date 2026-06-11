@@ -15,7 +15,7 @@ export interface ConfigStore {
   getProviderKeys(provider: string): Promise<string[] | null>;
   getModelAliases(): Promise<ModelAliasConfig>;
   getPriorityRules(): Promise<PriorityRule[]>;
-  getFallbackChain(provider: string): Promise<string[]>;
+  getFallbackChain(provider: string, staticFallbacks?: string[] | string): Promise<string[]>;
   getConfigVersion(): Promise<number>;
 }
 

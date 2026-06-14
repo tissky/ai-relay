@@ -1,10 +1,11 @@
 -- Migration: Add request_logs table for unified request logging
--- Supports on-demand capture across Postgres/KV/D1/Memory backends
+-- D1 (SQLite) dialect. Postgres deployments manage this table via
+-- drizzle-kit (src/lib/db/schema.ts → ./drizzle), not this file.
 
 CREATE TABLE IF NOT EXISTS request_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY,
   trace_id TEXT NOT NULL,
-  timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+  timestamp TEXT NOT NULL,
   api_key_hash TEXT NOT NULL,
   model TEXT NOT NULL,
   provider TEXT NOT NULL,
@@ -18,10 +19,9 @@ CREATE TABLE IF NOT EXISTS request_logs (
   error_type TEXT,
   error_message TEXT,
   diagnostic TEXT,
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Indexes for efficient queries (timestamp DESC, status, provider filters)
 CREATE INDEX IF NOT EXISTS request_logs_timestamp_idx ON request_logs(timestamp);
 CREATE INDEX IF NOT EXISTS request_logs_status_idx ON request_logs(status);
 CREATE INDEX IF NOT EXISTS request_logs_provider_idx ON request_logs(provider);

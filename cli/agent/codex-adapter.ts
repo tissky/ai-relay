@@ -120,26 +120,51 @@ requires_openai_auth = true
       throw new Error('Codex config not found');
     }
 
-    const content = fs.readFileSync(configPath, 'utf-8');
+    // Find the most recent backup
+    const configDir = path.dirname(configPath);
+    const backupPattern = path.basename(configPath) + '.backup.';
+    const backups = fs.readdirSync(configDir)
+      .filter(f => f.startsWith(backupPattern))
+      .map(f => ({
+        name: f,
+        path: path.join(configDir, f),
+        timestamp: parseInt(f.replace(backupPattern, ''), 10)
+      }))
+      .filter(b => !isNaN(b.timestamp))
+      .sort((a, b) => b.timestamp - a.timestamp);
 
-    // Remove ai-relay-local section
-    const lines = content.split('\n');
-    const filtered = [];
-    let inSection = false;
+    if (backups.length === 0) {
+      // No backup found, fall back to manual removal
+      console.warn('⚠️  No backup found, removing ai-relay-local section manually');
 
-    for (const line of lines) {
-      if (line.trim() === '[model_providers.ai-relay-local]') {
-        inSection = true;
-        continue;
+      const content = fs.readFileSync(configPath, 'utf-8');
+      const lines = content.split('\n');
+      const filtered = [];
+      let inSection = false;
+
+      for (const line of lines) {
+        if (line.trim() === '[model_providers.ai-relay-local]') {
+          inSection = true;
+          continue;
+        }
+        if (inSection && line.trim().startsWith('[')) {
+          inSection = false;
+        }
+        if (!inSection) {
+          filtered.push(line);
+        }
       }
-      if (inSection && line.trim().startsWith('[')) {
-        inSection = false;
-      }
-      if (!inSection) {
-        filtered.push(line);
-      }
+
+      fs.writeFileSync(configPath, filtered.join('\n'));
+      console.log('✅ Removed ai-relay-local provider');
+      return;
     }
 
-    fs.writeFileSync(configPath, filtered.join('\n'));
+    // Restore from most recent backup
+    const latestBackup = backups[0];
+    fs.copyFileSync(latestBackup.path, configPath);
+
+    console.log(`✅ Restored config from backup: ${latestBackup.name}`);
+    console.log(`   ${backups.length} backup(s) available in ${configDir}`);
   }
 }
